@@ -4,7 +4,7 @@ const AUTH_KEY = 'gb_pericias_auth'
 const PIN_KEY = 'gb_pericias_pin'
 const SESSION_TTL = 8 * 60 * 60 * 1000 // 8 hours
 
-const DEFAULT_PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4' // SHA-256 of "1234"
+const DEFAULT_PIN_HASH = '7611f1a57f80b0a87b4178e2e5f16bafa30dd0d9947d99f953c091d8c96abd0e' // SHA-256 of "1311"
 
 async function sha256(text: string): Promise<string> {
   const encoder = new TextEncoder()
