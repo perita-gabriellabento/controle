@@ -1,0 +1,626 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;900&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* ── Cores base ── */
+  --bg:           #111C26;
+  --surface:      #192535;
+  --surface-2:    #233345;
+  --surface-3:    #314558;
+  --gold:         #D4AF37;
+  --gold-light:   #F2E6B8;
+  --gold-dim:     rgba(212,175,55,0.15);
+  --gold-glow:    rgba(212,175,55,0.08);
+  --text:         #FAF7F1;
+  --muted:        rgba(250,247,241,0.45);
+  --border:       rgba(212,175,55,0.12);
+  --border-hover: rgba(212,175,55,0.3);
+
+  /* ── Canais RGB para Tailwind ── */
+  --color-bg:       17 28 38;
+  --color-surface:  25 37 53;
+  --color-surface2: 35 51 69;
+  --color-surface3: 49 69 88;
+  --color-gold:     212 175 55;
+  --color-goldlt:   242 230 184;
+  --color-text:     250 247 241;
+
+  /* ── Vars de componentes (dark default) ── */
+  --comp-thead:         rgba(17,28,38,0.98);
+  --comp-expand-from:   rgba(25,37,53,0.6);
+  --comp-expand-to:     rgba(49,69,88,0.25);
+  --comp-toolbar:       rgba(35,51,69,0.4);
+  --comp-toolbar-border:rgba(212,175,55,0.08);
+  --comp-cell-input:    #314558;
+  --comp-cell-hover:    rgba(255,255,255,0.03);
+  --comp-modal-from:    rgba(30,45,62,0.98);
+  --comp-modal-to:      rgba(17,28,38,0.98);
+  --comp-row-odd:       rgba(255,255,255,0.012);
+  --comp-row-hover:     rgba(212,175,55,0.025);
+  --comp-row-expanded:  rgba(212,175,55,0.04);
+  --comp-proposta-card: rgba(49,69,88,0.4);
+  --comp-scroll-bg:     rgba(212,175,55,0.2);
+  --comp-scroll-hover:  rgba(212,175,55,0.4);
+
+  /* ── Vars extras (dark default) ── */
+  --comp-textarea:          rgba(255,255,255,0.04);
+  --comp-save-btn-bg:       rgba(255,255,255,0.05);
+  --comp-save-btn-text:     rgba(250,247,241,0.6);
+  --comp-login-card-from:   rgba(35,51,69,0.97);
+  --comp-login-card-to:     rgba(17,28,38,0.95);
+  --comp-login-blob:        rgba(49,69,88,0.6);
+  --comp-expand-inactive:   rgba(250,247,241,0.2);
+  --comp-row-border:        rgba(212,175,55,0.05);
+  --comp-close-hover:       rgba(255,255,255,0.06);
+  --comp-table-wrapper-border: rgba(212,175,55,0.12);
+  /* elevation vars (dark defaults) */
+  --comp-table-bg:          rgba(25,37,53,0.45);
+  --comp-table-shadow:      none;
+  --comp-toolbar-shadow:    none;
+  --comp-card-shadow:       none;
+}
+
+[data-theme="light"] {
+  /* ── Paleta base — fundo azul-slate, cards brancos ── */
+  --bg:           #E4EBF5;
+  --surface:      #FFFFFF;
+  --surface-2:    #D9E4F0;
+  --surface-3:    #C3D2E4;
+  --gold:         #B8960C;
+  --gold-light:   #7A6008;
+  --gold-dim:     rgba(184,150,12,0.13);
+  --gold-glow:    rgba(184,150,12,0.07);
+  --text:         #0F1C2E;
+  --muted:        rgba(15,28,46,0.52);
+  --border:       rgba(49,69,88,0.22);
+  --border-hover: rgba(49,69,88,0.42);
+
+  /* Canais RGB para Tailwind com opacidade */
+  --color-bg:       228 235 245;
+  --color-surface:  255 255 255;
+  --color-surface2: 217 228 240;
+  --color-surface3: 195 210 228;
+  --color-gold:     184 150 12;
+  --color-goldlt:   122 96 8;
+  --color-text:     15 28 46;
+
+  /* ── Hierarquia de componentes ── */
+  /* thead: navy escuro — contraste máximo com as linhas brancas */
+  --comp-thead:         #1B2D42;
+  /* painel expandido: azul muito suave */
+  --comp-expand-from:   rgba(245,250,255,0.98);
+  --comp-expand-to:     rgba(230,242,255,0.80);
+  /* toolbar: branco nítido sobre o fundo azul */
+  --comp-toolbar:       rgba(255,255,255,0.99);
+  --comp-toolbar-border:rgba(49,69,88,0.16);
+  /* inputs: ligeiramente distinguíveis */
+  --comp-cell-input:    #CDDAEA;
+  --comp-cell-hover:    rgba(49,69,88,0.07);
+  /* modais */
+  --comp-modal-from:    rgba(250,253,255,0.99);
+  --comp-modal-to:      rgba(234,243,254,0.99);
+  /* linhas da tabela */
+  --comp-row-odd:       rgba(49,69,88,0.035);
+  /* hover DOURADO — identidade visual */
+  --comp-row-hover:     rgba(184,150,12,0.09);
+  --comp-row-expanded:  rgba(184,150,12,0.11);
+  --comp-proposta-card: rgba(240,247,255,0.98);
+  --comp-scroll-bg:     rgba(49,69,88,0.18);
+  --comp-scroll-hover:  rgba(49,69,88,0.35);
+
+  /* ── Vars extras ── */
+  --comp-textarea:          rgba(49,69,88,0.06);
+  --comp-save-btn-bg:       rgba(49,69,88,0.08);
+  --comp-save-btn-text:     rgba(15,28,46,0.68);
+  --comp-login-card-from:   rgba(255,255,255,0.99);
+  --comp-login-card-to:     rgba(234,243,254,0.98);
+  --comp-login-blob:        rgba(195,210,228,0.55);
+  --comp-expand-inactive:   rgba(15,28,46,0.25);
+  --comp-row-border:        rgba(49,69,88,0.11);
+  --comp-close-hover:       rgba(49,69,88,0.08);
+  --comp-table-wrapper-border: rgba(49,69,88,0.00); /* removido — só shadow */
+  /* elevation — profundidade real e dramática */
+  --comp-table-bg:          transparent;
+  --comp-table-shadow:      none;
+  --comp-toolbar-shadow:    0 4px 20px rgba(15,28,46,0.10), 0 1px 4px rgba(15,28,46,0.06);
+  --comp-card-shadow:       0 6px 28px rgba(15,28,46,0.12), 0 2px 6px rgba(15,28,46,0.07);
+}
+
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 110%;
+  background: var(--bg);
+  color-scheme: light;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Montserrat', sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+[data-theme="light"] body {
+  background: linear-gradient(160deg, #D6E8FF 0%, #E2EBF7 30%, #E8EFF8 60%, #EDF3FA 100%) fixed;
+  min-height: 100vh;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--comp-scroll-bg);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--comp-scroll-hover); }
+
+/* ─── Cinzel font class ───────────────────────────────────── */
+.font-cinzel { font-family: 'Cinzel', serif; }
+.font-montserrat { font-family: 'Montserrat', sans-serif; }
+
+/* ─── Gold divider ────────────────────────────────────────── */
+.gold-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.5) 50%, transparent 100%);
+}
+.gold-divider-wide {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--gold) 50%, transparent 100%);
+}
+
+/* ─── PIN input ───────────────────────────────────────────── */
+.pin-input {
+  all: unset;
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  font-size: 2rem;
+  letter-spacing: 1.5rem;
+  color: var(--gold);
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.25s ease;
+  cursor: text;
+}
+.pin-input:focus { border-bottom-color: var(--gold); outline: none; }
+.pin-input::placeholder { color: rgba(212,175,55,0.2); letter-spacing: 0.8rem; }
+
+/* ─── Animated glow blob ──────────────────────────────────── */
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(30px, -20px) scale(1.05); }
+  66%       { transform: translate(-20px, 15px) scale(0.97); }
+}
+.glow-blob { animation: blob-drift 18s ease-in-out infinite; }
+
+/* ─── Fade-in entrance ────────────────────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-fade-up-delay { animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both; }
+.animate-fade-up-delay-2 { animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both; }
+
+/* ─── Header glass ────────────────────────────────────────── */
+.header-glass {
+  background: rgba(17,28,38,0.88);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-bottom: 1px solid var(--border);
+}
+/* ─── Header premium: branco sobre azul-slate + linha dourada ── */
+[data-theme="light"] .header-glass {
+  background: #FFFFFF;
+  border-bottom: 2px solid rgba(184,150,12,0.28);
+  box-shadow: 0 2px 20px rgba(15,28,46,0.09);
+}
+
+/* ─── KPI cards: brancos flutuando com sombra forte ─────────── */
+[data-theme="light"] .kpi-card {
+  background: #FFFFFF;
+  border: none !important;
+  border-top: none !important;
+  box-shadow: var(--comp-card-shadow);
+  overflow: hidden;
+}
+[data-theme="light"] .kpi-card:hover {
+  box-shadow: 0 10px 36px rgba(15,28,46,0.16), 0 3px 8px rgba(15,28,46,0.09) !important;
+  transform: translateY(-3px);
+}
+
+/* ─── Tabela: thead navy escuro com texto branco ─────────────── */
+[data-theme="light"] .pericias-thead {
+  background: #1B2D42 !important;
+}
+[data-theme="light"] .pericias-thead th {
+  background: #1B2D42 !important;
+}
+/* Tailwind classes on inner div/span override inherited color — must target directly */
+[data-theme="light"] .pericias-thead th div,
+[data-theme="light"] .pericias-thead th span {
+  color: rgba(255,255,255,0.62) !important;
+}
+[data-theme="light"] .pericias-thead th:hover div {
+  color: rgba(212,175,55,0.9) !important;
+}
+[data-theme="light"] .pericias-thead th div svg {
+  color: rgba(255,255,255,0.25) !important;
+}
+[data-theme="light"] .pericias-thead th div svg.text-gold,
+[data-theme="light"] .pericias-thead th div .text-gold {
+  color: rgba(212,175,55,1) !important;
+}
+
+/* ─── Selects/inputs: branco em light mode (especificidade vence Tailwind) ── */
+/* Nota: inline style ainda vence — editable cell select mantém sua cor */
+[data-theme="light"] select {
+  background: #FFFFFF;
+  color: #0F1C2E;
+}
+[data-theme="light"] input:not([style*="background"]) {
+  background: #FFFFFF;
+}
+
+/* ─── Tabela: linha de separação mais visível ─────────────────── */
+[data-theme="light"] .pericias-row {
+  border-bottom: 1px solid rgba(49,69,88,0.09);
+}
+
+/* ─── Toolbar: fundo branco nítido com sombra ─────────────────── */
+[data-theme="light"] .toolbar-elevated {
+  background: #FFFFFF;
+  box-shadow: var(--comp-toolbar-shadow);
+  border: 1px solid rgba(49,69,88,0.12) !important;
+}
+
+/* ─── Light mode btn-gold-shimmer ─────────────────────────── */
+[data-theme="light"] .btn-gold-shimmer {
+  background: linear-gradient(90deg, #9A7B08 0%, #C8A820 35%, #D4AF37 50%, #9A7B08 100%);
+  background-size: 200% auto;
+}
+[data-theme="light"] .btn-gold-shimmer:hover {
+  box-shadow: 0 4px 20px rgba(184,150,12,0.28);
+}
+
+/* ─── Premium icon button ─────────────────────────────────── */
+.icon-btn {
+  border-radius: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(var(--color-text) / 0.35);
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  flex-shrink: 0;
+}
+.icon-btn:hover:not(:disabled) {
+  background: rgba(var(--color-gold) / 0.07);
+  border-color: rgba(var(--color-gold) / 0.18);
+  color: rgba(var(--color-gold) / 0.85);
+}
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.icon-btn-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.07);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: rgba(239, 68, 68, 0.8) !important;
+}
+/* Light mode: ícones com presença visual real */
+[data-theme="light"] .icon-btn {
+  color: rgba(15,28,46,0.55);
+  border-color: rgba(49,69,88,0.12);
+  background: rgba(255,255,255,0.7);
+  box-shadow: 0 1px 3px rgba(15,28,46,0.07);
+}
+[data-theme="light"] .icon-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,1);
+  border-color: rgba(184,150,12,0.35);
+  color: rgba(184,150,12,0.95);
+  box-shadow: 0 2px 8px rgba(184,150,12,0.15), 0 1px 3px rgba(15,28,46,0.07);
+}
+[data-theme="light"] .icon-btn-danger:hover:not(:disabled) {
+  background: rgba(255,245,245,1) !important;
+  border-color: rgba(239,68,68,0.3) !important;
+  color: rgba(220,38,38,0.85) !important;
+  box-shadow: 0 2px 8px rgba(239,68,68,0.12) !important;
+}
+
+/* ─── KPI card glow ───────────────────────────────────────── */
+.kpi-card {
+  background: linear-gradient(135deg, rgba(35,51,69,0.85) 0%, rgba(17,28,38,0.75) 100%);
+  border: 1px solid var(--border);
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.kpi-card:hover {
+  border-color: rgba(212,175,55,0.25);
+  box-shadow: 0 0 30px rgba(212,175,55,0.05), 0 4px 24px rgba(0,0,0,0.3);
+  transform: translateY(-1px);
+}
+
+/* ─── Editable cell ───────────────────────────────────────── */
+.cell-edit-hint {
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+tr:hover .cell-edit-hint { opacity: 1; }
+
+/* ─── Table rows ──────────────────────────────────────────── */
+.table-row-hover:hover td { background: rgba(212,175,55,0.02); }
+.pericias-row { transition: background 0.1s; }
+.pericias-row:hover { background: var(--comp-row-hover) !important; }
+.pericias-row-odd { background: var(--comp-row-odd); }
+.pericias-row-expanded { background: var(--comp-row-expanded) !important; }
+
+/* ─── Checklist item hover ────────────────────────────────── */
+.checklist-item:hover { background: var(--comp-cell-hover); }
+
+/* ─── Gold button shimmer ─────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.btn-gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    #D4AF37 0%,
+    #F2E6B8 40%,
+    #D4AF37 60%,
+    #B8960C 100%
+  );
+  background-size: 200% auto;
+  transition: background-position 0.4s ease, box-shadow 0.2s;
+}
+.btn-gold-shimmer:hover {
+  background-position: right center;
+  box-shadow: 0 4px 20px rgba(212,175,55,0.3);
+}
+.btn-gold-shimmer:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ─── Editable cell hover ─────────────────────────────────── */
+.cell-hover:hover { background: var(--comp-cell-hover); }
+
+/* ─── Expanded panel internal borders ────────────────────── */
+.panel-divider-b { border-bottom: 1px solid var(--comp-row-border); }
+@media (min-width: 640px) {
+  .panel-divider-b { border-bottom: none; }
+  .panel-divider-r { border-right: 1px solid var(--comp-row-border); }
+}
+
+/* ─── Dialog shadow ───────────────────────────────────────── */
+.shadow-dialog {
+  box-shadow: 0 24px 64px rgba(0,0,0,0.35), 0 4px 20px rgba(0,0,0,0.2);
+}
+[data-theme="light"] .shadow-dialog {
+  box-shadow: 0 16px 48px rgba(15,28,46,0.16), 0 4px 16px rgba(15,28,46,0.09);
+}
+
+/* ─── Light mode — thead separator ───────────────────────── */
+[data-theme="light"] .pericias-thead tr {
+  border-bottom: 2px solid rgba(255,255,255,0.12);
+}
+
+/* ─── Light mode — linhas como cards brancos flutuantes ──────── */
+[data-theme="light"] .pericias-table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+/* Cada célula de dado: card branco com sombra sutil */
+[data-theme="light"] .pericias-table tbody .pericias-row td {
+  background: #FFFFFF;
+  border-top: 4px solid transparent !important;
+  border-bottom: none !important;
+  box-shadow: 0 1px 4px rgba(15,28,46,0.06);
+}
+[data-theme="light"] .pericias-table tbody .pericias-row td:first-child {
+  border-left: 1px solid rgba(49,69,88,0.06) !important;
+  border-radius: 10px 0 0 10px;
+  box-shadow: -1px 2px 8px rgba(15,28,46,0.06), 0 1px 4px rgba(15,28,46,0.04);
+}
+[data-theme="light"] .pericias-table tbody .pericias-row td:last-child {
+  border-right: 1px solid rgba(49,69,88,0.06) !important;
+  border-radius: 0 10px 10px 0;
+  box-shadow: 1px 2px 8px rgba(15,28,46,0.06), 0 1px 4px rgba(15,28,46,0.04);
+}
+/* Hover: card dourado com elevação */
+[data-theme="light"] .pericias-table tbody .pericias-row {
+  background: transparent !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row:hover td {
+  background: rgba(255,253,240,0.99) !important;
+  box-shadow: 0 4px 16px rgba(184,150,12,0.13), 0 1px 4px rgba(15,28,46,0.06) !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row:hover td:first-child {
+  box-shadow: -2px 4px 16px rgba(184,150,12,0.10), 0 1px 4px rgba(15,28,46,0.05) !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row:hover td:last-child {
+  box-shadow: 2px 4px 16px rgba(184,150,12,0.10), 0 1px 4px rgba(15,28,46,0.05) !important;
+}
+/* Card expandido: radius superior apenas */
+[data-theme="light"] .pericias-table tbody .pericias-row-expanded td:first-child {
+  border-radius: 8px 0 0 0 !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row-expanded td:last-child {
+  border-radius: 0 8px 0 0 !important;
+}
+/* Linha de painel: invisível quando recolhida */
+[data-theme="light"] .pericias-table tbody .pericias-row + tr td {
+  background: transparent !important;
+  border: none !important;
+}
+/* Linha de painel expandida: aparece como extensão do card */
+[data-theme="light"] .pericias-table tbody .pericias-row-expanded + tr td {
+  background: rgba(248,252,255,0.99) !important;
+  border-left: 1px solid rgba(49,69,88,0.07) !important;
+  border-right: 1px solid rgba(49,69,88,0.07) !important;
+  border-bottom: 4px solid transparent !important;
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 4px 12px rgba(15,28,46,0.07);
+}
+
+/* ─── Light mode — accent lateral colorido por fase (enterprise data table) ── */
+[data-theme="light"] .pericias-table tbody .pericias-row[data-fase="Entregue"] td:first-child {
+  border-left: 3px solid rgba(34,197,94,0.55) !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row[data-fase="Em produção"] td:first-child {
+  border-left: 3px solid rgba(249,115,22,0.55) !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row[data-fase="Proposta de honorários"] td:first-child {
+  border-left: 3px solid rgba(156,163,175,0.5) !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row[data-fase="Aguardando recebimento honorários"] td:first-child {
+  border-left: 3px solid rgba(212,175,55,0.6) !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row[data-fase="Em diligência"] td:first-child {
+  border-left: 3px solid rgba(139,92,246,0.55) !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row[data-fase="Impugnação de laudo"] td:first-child {
+  border-left: 3px solid rgba(239,68,68,0.55) !important;
+}
+[data-theme="light"] .pericias-table tbody .pericias-row[data-fase="Aguardando intimação para início"] td:first-child,
+[data-theme="light"] .pericias-table tbody .pericias-row[data-fase="Aguardando intimação para proposta de honorários"] td:first-child {
+  border-left: 3px solid rgba(59,130,246,0.5) !important;
+}
+/* Expanded row: mantém o accent na extensão do card */
+[data-theme="light"] .pericias-table tbody .pericias-row-expanded + tr td {
+  border-left: 3px solid rgba(49,69,88,0.10) !important;
+}
+
+/* ─── Light mode — header mais premium ───────────────────────── */
+[data-theme="light"] .header-glass {
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  border-bottom: 1.5px solid rgba(184,150,12,0.28);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.9), 0 4px 24px rgba(15,28,46,0.07), 0 1px 4px rgba(15,28,46,0.04);
+}
+
+/* ─── Light mode — toolbar mais nítida ───────────────────────── */
+[data-theme="light"] .toolbar-elevated {
+  background: rgba(255,255,255,0.96) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(49,69,88,0.10) !important;
+  box-shadow: 0 2px 12px rgba(15,28,46,0.07), 0 1px 3px rgba(15,28,46,0.04) !important;
+}
+
+/* ─── Light mode — table wrapper sem borda, fundo integrado ──── */
+[data-theme="light"] .pericias-table-wrapper {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ─── Light mode — logo visível no header branco ─────────────── */
+[data-theme="light"] .logo-mark {
+  background: rgba(27,45,66,0.09);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+/* ─── Light mode — scrollbar azul-navy ───────────────────── */
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(27,45,66,0.18);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(27,45,66,0.32);
+}
+
+/* ─── Light mode — inputs brancos na toolbar/dialog ──────── */
+[data-theme="light"] .comp-toolbar input,
+[data-theme="light"] .comp-toolbar select {
+  background: #FFFFFF;
+}
+
+/* ─── Custom tooltip ──────────────────────────────────────── */
+.tip { position: relative; }
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15,28,46,0.93);
+  color: #ffffff;
+  font-size: 11px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease 0.25s;
+  z-index: 200;
+  letter-spacing: 0.02em;
+}
+.tip:hover::after { opacity: 1; }
+
+/* ─── Expand button ────────────────────────────────────────── */
+.expand-btn {
+  background: rgb(var(--color-text) / 0.05);
+  border: 1.5px solid rgb(var(--color-text) / 0.18);
+  color: rgb(var(--color-text) / 0.4);
+  transition: all 0.18s ease;
+}
+.expand-btn:hover {
+  background: rgb(var(--color-gold) / 0.09);
+  border-color: rgb(var(--color-gold) / 0.35);
+  color: rgb(var(--color-gold) / 0.85);
+}
+.expand-btn[data-expanded="true"] {
+  background: rgb(var(--color-gold) / 0.13);
+  border-color: rgb(var(--color-gold) / 0.5);
+  color: rgb(var(--color-gold) / 1);
+  box-shadow: 0 0 0 3px rgb(var(--color-gold) / 0.08), 0 2px 12px rgb(var(--color-gold) / 0.2);
+}
+
+/* ─── Privacy mode ────────────────────────────────────────── */
+.pv { transition: filter 0.3s ease; border-radius: 3px; }
+[data-privacy="true"] .pv {
+  filter: blur(8px);
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ─── Modal overlay ───────────────────────────────────────── */
+.modal-overlay {
+  background: rgba(10,16,24,0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+[data-theme="light"] .modal-overlay {
+  background: rgba(27,45,66,0.55);
+}
+
+/* ─── Table footer totals bar ─────────────────────────────── */
+[data-theme="light"] .pericias-table-footer {
+  background: rgba(255,255,255,0.85);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+/* ─── Noise texture overlay (subtle) ─────────────────────── */
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}

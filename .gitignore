@@ -1,0 +1,8 @@
+.env.local
+.env*.local
+node_modules/
+.next/
+*.bak
+
+# macOS
+.DS_Store
