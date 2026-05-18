@@ -132,7 +132,7 @@ export default function DashboardPage() {
           {/* Brand */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="logo-mark w-9 h-9 relative flex-shrink-0">
-              <Image src="/logo-mark.png" alt="GB" fill className="object-contain" priority />
+              <Image src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-mark.png`} alt="GB" fill className="object-contain" priority />
             </div>
             <div className="flex flex-col leading-none">
               <span className="font-cinzel text-[15px] text-gold tracking-wider">Controle de Perícias</span>

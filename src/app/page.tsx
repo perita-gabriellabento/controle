@@ -99,7 +99,7 @@ export default function LoginPage() {
               style={{ background: 'radial-gradient(ellipse, rgba(212,175,55,0.08) 0%, transparent 70%)' }}
             />
             <Image
-              src="/logo.png"
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo.png`}
               alt="Gabriella Bento, Perita Contábil"
               width={320}
               height={115}
