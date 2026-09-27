@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin } from 'lucide-react'
+import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin, KeyRound, Copy, X } from 'lucide-react'
 import { Pericia, ChecklistItem, ASPECON_TABLE } from '@/lib/types'
-import { updatePericia, archivePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, deleteCustomTask } from '@/lib/sheets'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, deleteCustomTask, getChecklistCacheSync } from '@/lib/sheets'
+import { authedFetch } from '@/lib/supabaseClient'
+import { formatCurrency, formatDate, parseCurrency, toTitleCase } from '@/lib/utils'
 import EditableCell from '@/components/EditableCell'
 import FaseBadge from '@/components/FaseBadge'
 import PropostaModal from '@/components/PropostaModal'
@@ -19,8 +20,6 @@ interface PericiasTableProps {
 
 type SortKey = keyof Pericia
 type SortDir = 'asc' | 'desc' | null
-
-const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 const CAMPO_LABELS: Record<string, string> = {
   poloAtivo: 'Polo Ativo',
@@ -38,12 +37,30 @@ const CAMPO_LABELS: Record<string, string> = {
   inicio: 'Início',
   entregaPrevista: 'Entrega Prevista',
   origem: 'Origem',
+  codigoAcesso: 'Código de Acesso',
 }
 
-function parseMoney(v: string): number {
-  if (!v) return 0
-  const n = parseFloat(v.replace(/[^\d,.-]/g, '').replace(',', '.'))
-  return isNaN(n) ? 0 : n
+// Campos cuja mudança pode afetar algum dos 3 eventos do Google Calendar (Fase 3).
+const CALENDAR_SYNC_FIELDS = new Set(['inicio', 'entregaPrevista', 'fase'])
+
+function triggerCalendarSync(periciaId: string) {
+  authedFetch('/api/calendar/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ periciaId }),
+  }).catch(() => {
+    // Falha de sincronização com o Calendar não deve incomodar o fluxo principal —
+    // a perícia já foi salva com sucesso no banco de qualquer forma. Silenciosa
+    // de propósito; o job de auto-correção (Fase 3) resolve divergências depois.
+  })
+}
+
+function triggerCalendarCleanup(periciaId: string) {
+  authedFetch('/api/calendar/sync', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ periciaId }),
+  }).catch(() => {})
 }
 
 function dateStatus(isoDate: string): 'overdue' | 'soon' | 'ok' | null {
@@ -77,8 +94,8 @@ function applyFilters(pericias: Pericia[], f: Filters): Pericia[] {
   if (f.tipo)   list = list.filter(p => p.tipo === f.tipo)
   if (f.uf)     list = list.filter(p => p.uf === f.uf)
   if (f.origem) list = list.filter(p => p.origem === f.origem)
-  if (f.cardFilter === 'a_receber')   list = list.filter(p => parseMoney(p.valorHonorarios) > parseMoney(p.honorariosRecebidos))
-  if (f.cardFilter === 'recebido')    list = list.filter(p => parseMoney(p.honorariosRecebidos) > 0)
+  if (f.cardFilter === 'a_receber')   list = list.filter(p => parseCurrency(p.valorHonorarios) > parseCurrency(p.honorariosRecebidos))
+  if (f.cardFilter === 'recebido')    list = list.filter(p => parseCurrency(p.honorariosRecebidos) > 0)
   if (f.cardFilter === 'em_producao') list = list.filter(p => p.fase === 'Em produção')
   if (f.cardFilter === 'entregue')    list = list.filter(p => p.fase === 'Entregue')
   if (f.cardFilter === 'em_proposta') list = list.filter(p => p.fase === 'Proposta de honorários')
@@ -99,9 +116,9 @@ const PROPOSTA_BADGE: Record<string, { bg: string; text: string; border: string 
 }
 
 const COLS: { key: SortKey; label: string; width: string; align?: 'right' | 'center' }[] = [
-  { key: 'qtd',                  label: '#',             width: 'w-8'          },
-  { key: 'poloAtivo',            label: 'Polo Ativo',    width: 'min-w-[130px]' },
-  { key: 'poloPassivo',          label: 'Polo Passivo',  width: 'min-w-[130px]' },
+  { key: 'qtd',                  label: '#',             width: ''             },
+  { key: 'poloAtivo',            label: 'Polo Ativo',    width: ''             },
+  { key: 'poloPassivo',          label: 'Polo Passivo',  width: ''             },
   { key: 'uf',                   label: 'UF',            width: 'w-12'         },
   { key: 'cidade',               label: 'Cidade',        width: 'min-w-[90px]' },
   { key: 'vara',                 label: 'Vara',          width: 'min-w-[90px]' },
@@ -154,25 +171,25 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
   const [newText, setNewText] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const globalItems = checklistItems.filter(i => !i.pericia_row)
-  const customItems = checklistItems.filter(i => i.pericia_row === p.row)
+  const customItems = checklistItems.filter(i => i.pericia_row === p.id)
   const allItems = [...globalItems, ...customItems]
 
-  const doneIds: number[] = (() => {
+  const doneIds: string[] = (() => {
     try { return JSON.parse(p.checklistDone || '[]') } catch { return [] }
   })()
 
   // Captura doneIds no momento do toggle para undo correto
-  async function toggleTask(id: number) {
+  async function toggleTask(id: string) {
     const prevDone = [...doneIds]
     const wasChecked = prevDone.includes(id)
     const newDone = wasChecked ? prevDone.filter(d => d !== id) : [...prevDone, id]
 
     // Optimistic: update cache and re-render immediately
-    updateCache(p.row, 'checklistDone', JSON.stringify(newDone))
+    updateCache(p.id, 'checklistDone', JSON.stringify(newDone))
     onUpdate()
 
     const label = allItems.find(i => i.id === id)?.descricao || 'Tarefa'
@@ -181,9 +198,9 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
       action: {
         label: '↩ Desfazer',
         onClick: async () => {
-          updateCache(p.row, 'checklistDone', JSON.stringify(prevDone))
+          updateCache(p.id, 'checklistDone', JSON.stringify(prevDone))
           onUpdate()
-          await saveChecklistStatus(p.row, prevDone)
+          await saveChecklistStatus(p.id, prevDone)
           toast.info('Alteração desfeita', { duration: 2000 })
         },
       },
@@ -191,9 +208,9 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
     })
 
     try {
-      await saveChecklistStatus(p.row, newDone)
+      await saveChecklistStatus(p.id, newDone)
     } catch {
-      revertCache(p.row, 'checklistDone', JSON.stringify(prevDone))
+      revertCache(p.id, 'checklistDone', JSON.stringify(prevDone))
       onUpdate()
       toast.error('Erro ao salvar tarefa. Tente novamente.')
     }
@@ -205,12 +222,12 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
     setSaving(true)
     setSaveError('')
     try {
-      const res = await addCustomTask(p.row, text)
+      const res = await addCustomTask(p.id, text)
       if (!res.ok) throw new Error(res.error || 'Erro ao salvar')
       const newId = res.id!
       setNewText('')
       setAdding(false)
-      onAddItem({ id: newId, descricao: text, pericia_row: p.row })
+      onAddItem({ id: newId, descricao: text, pericia_row: p.id })
       onChecklistChange()
       toast.success('Tarefa adicionada', {
         description: text,
@@ -231,13 +248,13 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
     }
   }
 
-  async function handleDeleteTask(id: number, descricao: string) {
+  async function handleDeleteTask(id: string, descricao: string) {
     setDeletingId(id)
     try {
       await deleteCustomTask(id)
       const newDone = doneIds.filter(d => d !== id)
       if (newDone.length !== doneIds.length) {
-        await saveChecklistStatus(p.row, newDone)
+        await saveChecklistStatus(p.id, newDone)
         onUpdate()
       }
       onChecklistChange()
@@ -246,7 +263,7 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
         action: {
           label: '↩ Desfazer',
           onClick: async () => {
-            await addCustomTask(p.row, descricao)
+            await addCustomTask(p.id, descricao)
             onChecklistChange()
             toast.info('Tarefa restaurada', { duration: 2000 })
           },
@@ -471,21 +488,83 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
   )
 }
 
+function sortByFilter(list: Pericia[], sortBy: string): Pericia[] {
+  const active = list.filter(p => p.fase !== 'Entregue')
+  const entregue = list.filter(p => p.fase === 'Entregue')
+
+  function sortGroup(arr: Pericia[]): Pericia[] {
+    if (sortBy === 'entrega_desc') {
+      return [...arr].sort((a, b) => {
+        if (!a.entregaPrevista && !b.entregaPrevista) return 0
+        if (!a.entregaPrevista) return 1
+        if (!b.entregaPrevista) return -1
+        return b.entregaPrevista.localeCompare(a.entregaPrevista)
+      })
+    }
+    if (sortBy === 'recente') return [...arr].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    if (sortBy === 'antiga') return [...arr].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return [...arr].sort((a, b) => {
+      if (!a.entregaPrevista && !b.entregaPrevista) return 0
+      if (!a.entregaPrevista) return 1
+      if (!b.entregaPrevista) return -1
+      return a.entregaPrevista.localeCompare(b.entregaPrevista)
+    })
+  }
+
+  return [...sortGroup(active), ...sortGroup(entregue)]
+}
+
+const MOBILE_PAGE = 10
+
 // ── Main table ────────────────────────────────────────────────
 
 export default function PericiasTable({ pericias, filters, onUpdate }: PericiasTableProps) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
-  const [archiving, setArchiving] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [syncingCells, setSyncingCells] = useState<Set<string>>(new Set())
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
-  const [propostaRow, setPropostaRow] = useState<number | null>(null)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(getChecklistCacheSync)
+  const [propostaRow, setPropostaRow] = useState<string | null>(null)
+  const [editingCodigoRow, setEditingCodigoRow] = useState<string | null>(null)
+  const [codigoPopupPos, setCodigoPopupPos] = useState<{ top: number; left: number } | null>(null)
+  const [optimisticArchivedRows, setOptimisticArchivedRows] = useState<Set<string>>(new Set())
+  const [mobileVisible, setMobileVisible] = useState(MOBILE_PAGE)
   const cellGenerations = useRef(new Map<string, number>())
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const codigoInputRef = useRef<HTMLInputElement>(null)
+  const pendingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const archiveCancellations = useRef(new Set<string>())
+
+  useEffect(() => {
+    if (editingCodigoRow !== null && codigoInputRef.current) {
+      codigoInputRef.current.focus()
+      codigoInputRef.current.select()
+    }
+  }, [editingCodigoRow])
+
+  // Fecha popup ao clicar fora dele
+  useEffect(() => {
+    if (editingCodigoRow === null) return
+    const handler = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (!t.closest('[data-codigo-popup]') && !t.closest('[data-codigo-btn]')) {
+        setEditingCodigoRow(null)
+        setCodigoPopupPos(null)
+      }
+    }
+    const id = setTimeout(() => document.addEventListener('mousedown', handler), 0)
+    return () => { clearTimeout(id); document.removeEventListener('mousedown', handler) }
+  }, [editingCodigoRow])
 
   useEffect(() => {
     fetchChecklist().then(setChecklistItems)
   }, [])
+
+  // Reseta paginação mobile sempre que os filtros mudam
+  useEffect(() => {
+    setMobileVisible(MOBILE_PAGE)
+  }, [filters])
 
   const refetchChecklist = useCallback(() => {
     fetchChecklist(true).then(setChecklistItems)
@@ -495,7 +574,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
     setChecklistItems(prev => [...prev, item])
   }, [])
 
-  function toggleExpand(row: number) {
+  function toggleExpand(row: string) {
     setExpandedRows(s => {
       const ns = new Set(s)
       ns.has(row) ? ns.delete(row) : ns.add(row)
@@ -513,16 +592,16 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
     }
   }
 
-  const handleSave = useCallback((row: number, campo: keyof Pericia, valor: string, oldValor: string, silent = false) => {
+  const handleSave = useCallback((row: string, campo: keyof Pericia, valor: string, oldValor: string, silent = false) => {
     const cellKey = `${row}:${String(campo)}`
     const label = CAMPO_LABELS[String(campo)] || String(campo)
 
     const gen = (cellGenerations.current.get(cellKey) || 0) + 1
     cellGenerations.current.set(cellKey, gen)
 
-    if (pendingTimers.has(cellKey)) {
-      clearTimeout(pendingTimers.get(cellKey)!)
-      pendingTimers.delete(cellKey)
+    if (pendingTimers.current.has(cellKey)) {
+      clearTimeout(pendingTimers.current.get(cellKey)!)
+      pendingTimers.current.delete(cellKey)
     }
 
     updateCache(row, campo, valor)
@@ -537,13 +616,14 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
           onClick: () => {
             if (cellGenerations.current.get(cellKey) !== gen) return
             cellGenerations.current.set(cellKey, gen + 1)
-            if (pendingTimers.has(cellKey)) {
-              clearTimeout(pendingTimers.get(cellKey)!)
-              pendingTimers.delete(cellKey)
+            if (pendingTimers.current.has(cellKey)) {
+              clearTimeout(pendingTimers.current.get(cellKey)!)
+              pendingTimers.current.delete(cellKey)
             }
             updateCache(row, campo, oldValor)
             setSyncingCells(s => { const ns = new Set(s); ns.delete(cellKey); return ns })
             onUpdate()
+            updatePericia(row, campo, oldValor)
             toast.info('Alteração desfeita', { duration: 2000 })
           },
         },
@@ -551,12 +631,13 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
       })
     }
 
-    pendingTimers.set(cellKey, setTimeout(async () => {
+    pendingTimers.current.set(cellKey, setTimeout(async () => {
       if (cellGenerations.current.get(cellKey) !== gen) return
-      pendingTimers.delete(cellKey)
+      pendingTimers.current.delete(cellKey)
       try {
         const res = await updatePericia(row, campo, valor)
         if (!res.ok) throw new Error(res.error || 'Falha ao salvar')
+        if (CALENDAR_SYNC_FIELDS.has(campo as string)) triggerCalendarSync(row)
       } catch (err) {
         revertCache(row, campo, oldValor)
         onUpdate()
@@ -564,7 +645,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
       } finally {
         if (!silent) setSyncingCells(s => { const ns = new Set(s); ns.delete(cellKey); return ns })
       }
-    }, silent ? 150 : 3000))
+    }, silent ? 100 : 800))
   }, [onUpdate])
 
   function calcHonorarios(proposta: string, origem: string): string {
@@ -573,39 +654,100 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
     return String(origem === 'Indicação' ? +(n * 0.4).toFixed(2) : n)
   }
 
-  const handleArchive = async (row: number) => {
-    if (!confirm('Arquivar este processo? Ele não aparecerá mais na listagem principal.')) return
-    setArchiving(row)
+  function saveCodigoAcesso(row: string, oldVal: string) {
+    const val = (codigoInputRef.current?.value || '').trim()
+    setEditingCodigoRow(null)
+    setCodigoPopupPos(null)
+    if (val !== oldVal) handleSave(row, 'codigoAcesso', val, oldVal)
+  }
+
+  const handleArchive = (row: string) => {
+    setOptimisticArchivedRows(s => new Set(s).add(row))
+    toast.success('Processo arquivado', {
+      action: {
+        label: '↩ Desfazer',
+        onClick: () => {
+          archiveCancellations.current.add(row)
+          setOptimisticArchivedRows(s => { const ns = new Set(s); ns.delete(row); return ns })
+          toast.info('Arquivamento cancelado', { duration: 2000 })
+        },
+      },
+      duration: 4000,
+    })
+    setTimeout(async () => {
+      if (archiveCancellations.current.has(row)) {
+        archiveCancellations.current.delete(row)
+        return
+      }
+      try {
+        const res = await archivePericia(row)
+        if (!res.ok) throw new Error(res.error || 'Erro ao arquivar')
+        invalidateCache()
+        onUpdate()
+        triggerCalendarSync(row) // remove os eventos do Calendar (processo arquivado)
+      } catch (err) {
+        setOptimisticArchivedRows(s => { const ns = new Set(s); ns.delete(row); return ns })
+        toast.error(err instanceof Error ? err.message : 'Erro ao arquivar')
+      }
+    }, 4200)
+  }
+
+  const handleDelete = async (row: string) => {
+    if (!confirm('Excluir permanentemente este processo? Esta ação não pode ser desfeita.')) return
+    setDeleting(row)
     try {
-      const res = await archivePericia(row)
-      if (!res.ok) throw new Error(res.error || 'Erro ao arquivar')
+      // Limpa os eventos do Calendar ANTES de apagar (depois de apagada, a perícia
+      // não existe mais pra rota de sync consultar os ids salvos).
+      triggerCalendarCleanup(row)
+      const res = await deletePericia(row)
+      if (!res.ok) throw new Error(res.error || 'Erro ao excluir')
       invalidateCache()
-      toast.success('Processo arquivado com sucesso')
+      toast.success('Processo excluído permanentemente')
       onUpdate()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao arquivar')
+      toast.error(err instanceof Error ? err.message : 'Erro ao excluir')
     } finally {
-      setArchiving(null)
+      setDeleting(null)
     }
   }
 
-  let filtered = applyFilters(pericias, filters)
-  if (sortKey && sortDir) {
-    filtered = [...filtered].sort((a, b) => {
-      const va = String(a[sortKey] ?? '')
-      const vb = String(b[sortKey] ?? '')
-      const cmp = va.localeCompare(vb, 'pt-BR', { sensitivity: 'base', numeric: true })
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-  }
+  const filtered = useMemo(() => {
+    let list = applyFilters(pericias, filters)
+    if (optimisticArchivedRows.size > 0) {
+      list = list.filter(p => !optimisticArchivedRows.has(p.id))
+    }
+    if (sortKey && sortDir) {
+      list = [...list].sort((a, b) => {
+        const va = String(a[sortKey] ?? '')
+        const vb = String(b[sortKey] ?? '')
+        const cmp = va.localeCompare(vb, 'pt-BR', { sensitivity: 'base', numeric: true })
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    } else {
+      list = sortByFilter(list, filters.sortBy)
+    }
+    return list
+  }, [pericias, filters, sortKey, sortDir, optimisticArchivedRows])
 
-  const propostaPericia = propostaRow !== null ? pericias.find(p => p.row === propostaRow) : null
+  const propostaPericia = useMemo(
+    () => propostaRow !== null ? (pericias.find(p => p.id === propostaRow) ?? null) : null,
+    [propostaRow, pericias]
+  )
 
-  const globalChecklistItems = checklistItems.filter(i => !i.pericia_row)
+  const globalChecklistItems = useMemo(() => checklistItems.filter(i => !i.pericia_row), [checklistItems])
 
-  const totalHonorarios = filtered.reduce((s, p) => s + parseMoney(p.valorHonorarios), 0)
-  const totalRecebido = filtered.reduce((s, p) => s + parseMoney(p.honorariosRecebidos), 0)
-  const totalAReceber = filtered.reduce((s, p) => s + Math.max(0, parseMoney(p.valorHonorarios) - parseMoney(p.honorariosRecebidos)), 0)
+  const { totalVProposta, totalHonorarios, totalRecebido, totalAReceber } = useMemo(() => {
+    let vp = 0, hon = 0, rec = 0, ar = 0
+    for (const p of filtered) {
+      const h = parseCurrency(p.valorHonorarios)
+      const r = parseCurrency(p.honorariosRecebidos)
+      vp += parseCurrency(p.valorPropostaHonorarios || '')
+      hon += h
+      rec += r
+      ar += Math.max(0, h - r)
+    }
+    return { totalVProposta: vp, totalHonorarios: hon, totalRecebido: rec, totalAReceber: ar }
+  }, [filtered])
 
   if (filtered.length === 0) {
     return (
@@ -623,21 +765,29 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
 
   return (
     <>
-      <div className="rounded-xl pericias-table-wrapper" style={{ background: 'var(--comp-table-bg)', border: '1px solid var(--comp-table-wrapper-border)', boxShadow: 'var(--comp-table-shadow)' }}>
-        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 345px)', paddingBottom: '2px', scrollbarGutter: 'stable' }}>
-          <table className="w-full text-[14px] font-montserrat border-collapse pericias-table">
+      {/* ── Desktop table ─────────────────────────────────────── */}
+      <div className="hidden md:block rounded-xl pericias-table-wrapper" style={{ background: 'var(--comp-table-bg)', border: '1px solid var(--comp-table-wrapper-border)', boxShadow: 'var(--comp-table-shadow)' }}>
+        <div ref={scrollRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 318px)', paddingBottom: '2px', scrollbarGutter: 'stable' }}>
+          <table className="w-full text-[14px] font-montserrat pericias-table">
             <thead className="sticky top-0 z-10 pericias-thead" style={{ background: 'var(--comp-thead)', backdropFilter: 'blur(8px)' }}>
-              <tr style={{ borderBottom: '1px solid var(--comp-table-wrapper-border)' }}>
-                {/* Expand column */}
-                <th className="w-10 px-2 py-4" />
-                {/* Action column — first for immediate access */}
-                <th className="w-[100px] px-2 py-4">
+              <tr>
+                {/* Expand column — frozen 1 */}
+                <th className="sticky-col px-2 py-4" style={{ width: 44, minWidth: 44, left: 0 }} />
+                {/* Action column — frozen 2 */}
+                <th className="sticky-col px-2 py-4" style={{ width: 136, minWidth: 136, left: 44 }}>
                   <span className="text-[12px] font-semibold uppercase tracking-widest text-text/45">Ação</span>
                 </th>
-                {COLS.map(h => (
+                {COLS.map((h, hi) => {
+                  const isFrozen = hi < 3 // qtd, poloAtivo, poloPassivo
+                  const isLast = hi === 2
+                  return (
                   <th
                     key={h.key}
-                    className={`${h.width} px-3 py-4 select-none whitespace-nowrap cursor-pointer group ${h.align === 'right' ? 'text-right' : h.align === 'center' ? 'text-center' : 'text-left'}`}
+                    className={`${isFrozen ? `sticky-col${isLast ? ' sticky-col-last' : ''}` : ''} ${h.width} px-3 py-4 select-none whitespace-nowrap cursor-pointer group ${h.align === 'right' ? 'text-right' : h.align === 'center' ? 'text-center' : 'text-left'}`}
+                    style={isFrozen ? {
+                      minWidth: isLast || hi === 1 ? 148 : undefined,
+                      left: hi === 0 ? 180 : hi === 1 ? 220 : 368,
+                    } : undefined}
                     onClick={() => toggleSort(h.key)}
                   >
                     <div className={`flex items-center gap-1 text-[12px] font-semibold uppercase tracking-widest text-text/55 group-hover:text-gold/80 transition-colors ${h.align === 'right' ? 'justify-end' : h.align === 'center' ? 'justify-center' : ''}`}>
@@ -645,15 +795,16 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                       <SortIcon col={h.key} sortKey={sortKey} sortDir={sortDir} />
                     </div>
                   </th>
-                ))}
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
               {filtered.map((p, idx) => {
-                const isExpanded = expandedRows.has(p.row)
+                const isExpanded = expandedRows.has(p.id)
                 const isEven = idx % 2 === 0
-                const doneIds: number[] = (() => { try { return JSON.parse(p.checklistDone || '[]') } catch { return [] } })()
-                const rowAllItems = [...globalChecklistItems, ...checklistItems.filter(i => i.pericia_row === p.row)]
+                const doneIds: string[] = (() => { try { return JSON.parse(p.checklistDone || '[]') } catch { return [] } })()
+                const rowAllItems = [...globalChecklistItems, ...checklistItems.filter(i => i.pericia_row === p.id)]
                 const rowDone = doneIds.filter(id => rowAllItems.some(i => i.id === id)).length
                 const rowTotal = rowAllItems.length
                 const rowPct = rowTotal > 0 ? Math.round((rowDone / rowTotal) * 100) : 0
@@ -662,18 +813,16 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                 const propBadge = p.propostaStatus ? PROPOSTA_BADGE[p.propostaStatus] : null
 
                 return (
-                  <>
+                  <React.Fragment key={p.id}>
                     <tr
-                      key={p.row}
                       data-fase={p.fase}
                       className={`pericias-row transition-colors duration-100 ${isEven ? '' : 'pericias-row-odd'} ${isExpanded ? 'pericias-row-expanded' : ''}`}
-                      style={{ borderBottom: '1px solid var(--comp-row-border)' }}
                     >
-                      {/* Expand button + mini progresso */}
-                      <td className="px-2 py-1.5 text-center">
+                      {/* Expand button + mini progresso — frozen 1 */}
+                      <td className="sticky-col px-2 py-1.5 text-center" style={{ width: 44, minWidth: 44, left: 0 }}>
                         <div className="flex flex-col items-center gap-1.5">
                           <button
-                            onClick={() => toggleExpand(p.row)}
+                            onClick={() => toggleExpand(p.id)}
                             className="w-9 h-9 rounded-xl flex items-center justify-center expand-btn tip"
                             data-expanded={String(isExpanded)}
                             data-tip={isExpanded ? 'Recolher' : 'Checklist e proposta'}
@@ -696,11 +845,11 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                         </div>
                       </td>
 
-                      {/* Action cell — moved to front */}
-                      <td className="px-2 py-2.5">
+                      {/* Action cell — frozen 2 */}
+                      <td className="sticky-col px-2 py-2.5" style={{ width: 136, minWidth: 136, left: 44 }}>
                         <div className="flex items-center gap-1 justify-center">
                           <button
-                            onClick={() => { setPropostaRow(p.row); setExpandedRows(s => new Set(s).add(p.row)) }}
+                            onClick={() => { setPropostaRow(p.id); setExpandedRows(s => new Set(s).add(p.id)) }}
                             className="tip w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150"
                             data-tip="Proposta"
                             style={{
@@ -711,9 +860,39 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                           >
                             <FileText size={12} />
                           </button>
+                          <button
+                            data-codigo-btn
+                            className="tip w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150"
+                            data-tip={p.codigoAcesso ? `Cód: ${p.codigoAcesso}` : 'Definir código de acesso'}
+                            onClick={e => {
+                              const rect = e.currentTarget.getBoundingClientRect()
+                              const pw = 232
+                              const left = Math.min(rect.left, window.innerWidth - pw - 8)
+                              const top = rect.bottom + 4 > window.innerHeight - 160 ? rect.top - 164 : rect.bottom + 4
+                              setCodigoPopupPos({ top, left })
+                              setEditingCodigoRow(p.id)
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.color = 'rgba(212,175,55,0.95)'
+                              e.currentTarget.style.background = 'rgba(212,175,55,0.14)'
+                              e.currentTarget.style.border = '1px solid rgba(212,175,55,0.3)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.color = p.codigoAcesso ? 'rgba(212,175,55,0.7)' : 'var(--comp-expand-inactive)'
+                              e.currentTarget.style.background = p.codigoAcesso ? 'rgba(212,175,55,0.08)' : 'transparent'
+                              e.currentTarget.style.border = p.codigoAcesso ? '1px solid rgba(212,175,55,0.2)' : '1px solid transparent'
+                            }}
+                            style={{
+                              color: p.codigoAcesso ? 'rgba(212,175,55,0.7)' : 'var(--comp-expand-inactive)',
+                              background: p.codigoAcesso ? 'rgba(212,175,55,0.08)' : 'transparent',
+                              border: p.codigoAcesso ? '1px solid rgba(212,175,55,0.2)' : '1px solid transparent',
+                            }}
+                          >
+                            <KeyRound size={12} />
+                          </button>
                           {checklistItems.length > 0 && (
                             <button
-                              onClick={() => toggleExpand(p.row)}
+                              onClick={() => toggleExpand(p.id)}
                               className="tip w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150"
                               data-tip={`Checklist ${rowDone}/${rowTotal}`}
                               style={{
@@ -724,123 +903,138 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                             </button>
                           )}
                           <button
-                            className="tip w-7 h-7 rounded-lg flex items-center justify-center text-text/30 hover:text-red-400/80 hover:bg-red-400/10 transition-all duration-150 disabled:opacity-40"
-                            disabled={archiving === p.row}
-                            onClick={() => handleArchive(p.row)}
-                            data-tip="Arquivar"
+                            className="tip w-7 h-7 rounded-lg flex items-center justify-center text-text/30 hover:text-amber-400/80 hover:bg-amber-400/10 transition-all duration-150"
+                            onClick={() => handleArchive(p.id)}
+                            data-tip="Arquivar (ocultar)"
                           >
                             <Archive size={13} />
+                          </button>
+                          <button
+                            className="tip w-7 h-7 rounded-lg flex items-center justify-center text-text/30 hover:text-red-500/90 hover:bg-red-500/10 transition-all duration-150 disabled:opacity-40"
+                            disabled={deleting === p.id}
+                            onClick={() => handleDelete(p.id)}
+                            data-tip="Excluir permanente"
+                          >
+                            <Trash2 size={12} />
                           </button>
                         </div>
                       </td>
 
-                      <td className="px-3 py-3 text-text/50 text-[11px] font-mono">{p.qtd || idx + 1}</td>
+                      {/* qtd — frozen 3 */}
+                      <td className="sticky-col px-3 py-3 text-text/50 text-[11px] font-mono" style={{ width: 40, minWidth: 40, left: 180 }}>{p.qtd || idx + 1}</td>
 
-                      <td className="px-3 py-3">
+                      {/* poloAtivo — frozen 4 */}
+                      <td className="sticky-col px-3 py-3" style={{ width: 148, minWidth: 148, left: 220 }}>
                         <EditableCell value={p.poloAtivo} campo="poloAtivo"
-                          syncing={syncingCells.has(`${p.row}:poloAtivo`)}
-                          onSave={v => handleSave(p.row, 'poloAtivo', v, p.poloAtivo)} />
+                          syncing={syncingCells.has(`${p.id}:poloAtivo`)}
+                          renderDisplay={v => <span className="text-text/85 text-[13px] font-medium leading-snug">{toTitleCase(v) || '—'}</span>}
+                          onSave={v => handleSave(p.id, 'poloAtivo', v, p.poloAtivo)} />
                       </td>
-                      <td className="px-3 py-3">
+                      {/* poloPassivo — frozen 5 (last frozen) */}
+                      <td className="sticky-col sticky-col-last px-3 py-3" style={{ width: 148, minWidth: 148, left: 368 }}>
                         <EditableCell value={p.poloPassivo} campo="poloPassivo"
-                          syncing={syncingCells.has(`${p.row}:poloPassivo`)}
-                          onSave={v => handleSave(p.row, 'poloPassivo', v, p.poloPassivo)} />
+                          syncing={syncingCells.has(`${p.id}:poloPassivo`)}
+                          renderDisplay={v => <span className="text-text/85 text-[13px] font-medium leading-snug">{toTitleCase(v) || '—'}</span>}
+                          onSave={v => handleSave(p.id, 'poloPassivo', v, p.poloPassivo)} />
                       </td>
                       <td className="px-3 py-3">
                         <EditableCell value={p.uf} campo="uf" type="select-uf"
-                          syncing={syncingCells.has(`${p.row}:uf`)}
-                          onSave={v => handleSave(p.row, 'uf', v, p.uf)} />
+                          syncing={syncingCells.has(`${p.id}:uf`)}
+                          onSave={v => handleSave(p.id, 'uf', v, p.uf)} />
                       </td>
                       <td className="px-3 py-3">
                         <EditableCell value={p.cidade} campo="cidade"
-                          syncing={syncingCells.has(`${p.row}:cidade`)}
-                          onSave={v => handleSave(p.row, 'cidade', v, p.cidade)} />
+                          syncing={syncingCells.has(`${p.id}:cidade`)}
+                          renderDisplay={v => <span className="text-text/75">{toTitleCase(v) || '—'}</span>}
+                          onSave={v => handleSave(p.id, 'cidade', v, p.cidade)} />
                       </td>
                       <td className="px-3 py-3">
                         <EditableCell value={p.vara} campo="vara"
-                          syncing={syncingCells.has(`${p.row}:vara`)}
-                          onSave={v => handleSave(p.row, 'vara', v, p.vara)} />
+                          syncing={syncingCells.has(`${p.id}:vara`)}
+                          renderDisplay={v => <span className="text-text/75">{toTitleCase(v) || '—'}</span>}
+                          onSave={v => handleSave(p.id, 'vara', v, p.vara)} />
                       </td>
                       <td className="px-3 py-3">
                         <EditableCell value={p.numeroProcesso} campo="numeroProcesso"
                           className="font-mono text-[11px] tracking-wide"
-                          syncing={syncingCells.has(`${p.row}:numeroProcesso`)}
-                          onSave={v => handleSave(p.row, 'numeroProcesso', v, p.numeroProcesso)} />
+                          syncing={syncingCells.has(`${p.id}:numeroProcesso`)}
+                          onSave={v => handleSave(p.id, 'numeroProcesso', v, p.numeroProcesso)} />
                       </td>
                       <td className="px-3 py-3">
                         <EditableCell value={p.assunto} campo="assunto"
-                          syncing={syncingCells.has(`${p.row}:assunto`)}
-                          onSave={v => handleSave(p.row, 'assunto', v, p.assunto)} />
+                          syncing={syncingCells.has(`${p.id}:assunto`)}
+                          renderDisplay={v => <span className="text-text/75">{toTitleCase(v) || '—'}</span>}
+                          onSave={v => handleSave(p.id, 'assunto', v, p.assunto)} />
                       </td>
                       <td className="px-3 py-3">
                         <EditableCell value={p.tipo} campo="tipo" type="select-tipo"
-                          syncing={syncingCells.has(`${p.row}:tipo`)}
+                          syncing={syncingCells.has(`${p.id}:tipo`)}
                           renderDisplay={v => (
                             <span className={`text-[12px] font-semibold ${v === 'Particular' ? 'text-gold/90' : 'text-blue-400/80'}`}>
                               {v === 'Assistência Judiciária Gratuita' ? 'AJG' : v || '—'}
                             </span>
                           )}
-                          onSave={v => handleSave(p.row, 'tipo', v, p.tipo)} />
+                          onSave={v => handleSave(p.id, 'tipo', v, p.tipo)} />
                       </td>
                       <td className="px-3 py-3">
                         <EditableCell value={p.fase} campo="fase" type="select-fase"
-                          syncing={syncingCells.has(`${p.row}:fase`)}
+                          syncing={syncingCells.has(`${p.id}:fase`)}
                           renderDisplay={v => <FaseBadge fase={v as Parameters<typeof FaseBadge>[0]['fase']} size="sm" />}
-                          onSave={v => handleSave(p.row, 'fase', v, p.fase)} />
+                          onSave={v => handleSave(p.id, 'fase', v, p.fase)} />
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <EditableCell value={p.valorPropostaHonorarios || ''} campo="valorPropostaHonorarios" type="currency"
                           className="justify-end"
-                          syncing={syncingCells.has(`${p.row}:valorPropostaHonorarios`)}
+                          syncing={syncingCells.has(`${p.id}:valorPropostaHonorarios`)}
                           renderDisplay={v => (
                             <span className={`pv ${v ? 'text-text/65 font-medium' : 'text-text/30'}`}>
                               {v ? formatCurrency(v) : '—'}
                             </span>
                           )}
                           onSave={v => {
-                            handleSave(p.row, 'valorPropostaHonorarios', v, p.valorPropostaHonorarios || '')
-                            handleSave(p.row, 'valorHonorarios', calcHonorarios(v, p.origem), p.valorHonorarios, true)
+                            handleSave(p.id, 'valorPropostaHonorarios', v, p.valorPropostaHonorarios || '')
+                            handleSave(p.id, 'valorHonorarios', calcHonorarios(v, p.origem), p.valorHonorarios, true)
                           }} />
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <EditableCell value={p.valorHonorarios} campo="valorHonorarios" type="currency"
                           className="justify-end"
-                          syncing={syncingCells.has(`${p.row}:valorHonorarios`)}
+                          syncing={syncingCells.has(`${p.id}:valorHonorarios`)}
                           renderDisplay={v => (
                             <span className={`pv ${v ? 'text-gold-light/90 font-semibold' : 'text-text/30'}`}>
                               {v ? formatCurrency(v) : '—'}
                             </span>
                           )}
-                          onSave={v => handleSave(p.row, 'valorHonorarios', v, p.valorHonorarios)} />
+                          onSave={v => handleSave(p.id, 'valorHonorarios', v, p.valorHonorarios)} />
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <EditableCell value={p.honorariosRecebidos} campo="honorariosRecebidos" type="currency"
                           className="justify-end"
-                          syncing={syncingCells.has(`${p.row}:honorariosRecebidos`)}
+                          syncing={syncingCells.has(`${p.id}:honorariosRecebidos`)}
                           renderDisplay={v => (
                             <span className={`pv ${v ? 'text-green-400/85 font-semibold' : 'text-text/30'}`}>
                               {v ? formatCurrency(v) : '—'}
                             </span>
                           )}
-                          onSave={v => handleSave(p.row, 'honorariosRecebidos', v, p.honorariosRecebidos)} />
+                          onSave={v => handleSave(p.id, 'honorariosRecebidos', v, p.honorariosRecebidos)} />
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <EditableCell value={p.solicitarDocs} campo="solicitarDocs" type="select-docs"
-                          syncing={syncingCells.has(`${p.row}:solicitarDocs`)}
+                          syncing={syncingCells.has(`${p.id}:solicitarDocs`)}
                           renderDisplay={v => (
                             <span className={v === 'Sim' ? 'text-amber-400/90 font-bold text-[12px]' : v === 'Não' ? 'text-text/45 text-[12px]' : 'text-text/30 text-[12px]'}>{v || '—'}</span>
                           )}
-                          onSave={v => handleSave(p.row, 'solicitarDocs', v, p.solicitarDocs)} />
+                          onSave={v => handleSave(p.id, 'solicitarDocs', v, p.solicitarDocs)} />
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <EditableCell value={p.inicio} campo="inicio" type="date"
-                          syncing={syncingCells.has(`${p.row}:inicio`)}
+                          syncing={syncingCells.has(`${p.id}:inicio`)}
                           renderDisplay={v => <span className="text-text/70 tabular-nums">{formatDate(v) || '—'}</span>}
-                          onSave={v => handleSave(p.row, 'inicio', v, p.inicio)} />
+                          onSave={v => handleSave(p.id, 'inicio', v, p.inicio)} />
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <EditableCell value={p.entregaPrevista} campo="entregaPrevista" type="date"
-                          syncing={syncingCells.has(`${p.row}:entregaPrevista`)}
+                          syncing={syncingCells.has(`${p.id}:entregaPrevista`)}
                           renderDisplay={v => {
                             const ds = dateStatus(v)
                             if (!v) return <span className="text-text/30">—</span>
@@ -859,25 +1053,25 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                             )
                             return <span className="text-text/70 tabular-nums">{fmt}</span>
                           }}
-                          onSave={v => handleSave(p.row, 'entregaPrevista', v, p.entregaPrevista)} />
+                          onSave={v => handleSave(p.id, 'entregaPrevista', v, p.entregaPrevista)} />
                       </td>
                       <td className="px-3 py-3">
                         <EditableCell value={p.origem} campo="origem" type="select-origem"
-                          syncing={syncingCells.has(`${p.row}:origem`)}
+                          syncing={syncingCells.has(`${p.id}:origem`)}
                           renderDisplay={v => (
                             <span className={`text-[12px] font-medium ${v === 'Indicação' ? 'text-purple-400/80' : 'text-text/65'}`}>{v || '—'}</span>
                           )}
                           onSave={v => {
-                            handleSave(p.row, 'origem', v, p.origem)
-                            handleSave(p.row, 'valorHonorarios', calcHonorarios(p.valorPropostaHonorarios || '', v), p.valorHonorarios, true)
+                            handleSave(p.id, 'origem', v, p.origem)
+                            handleSave(p.id, 'valorHonorarios', calcHonorarios(p.valorPropostaHonorarios || '', v), p.valorHonorarios, true)
                           }} />
                       </td>
 
                     </tr>
 
                     {/* Expanded panel row */}
-                    <tr key={`exp-${p.row}`} className="expanded-panel-row" style={{ borderBottom: '1px solid var(--comp-row-border)' }}>
-                      <td colSpan={totalCols} style={{ padding: 0 }}>
+                    <tr key={`exp-${p.id}`} className="expanded-panel-row">
+                      <td colSpan={totalCols} style={{ padding: 0, position: 'sticky', left: 0, zIndex: 1 }}>
                         <div style={{
                           maxHeight: isExpanded ? '600px' : '0',
                           overflow: 'hidden',
@@ -887,14 +1081,14 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                             pericia={p}
                             checklistItems={checklistItems}
                             onUpdate={onUpdate}
-                            onOpenProposta={() => setPropostaRow(p.row)}
+                            onOpenProposta={() => setPropostaRow(p.id)}
                             onChecklistChange={refetchChecklist}
                             onAddItem={handleAddItem}
                           />
                         </div>
                       </td>
                     </tr>
-                  </>
+                  </React.Fragment>
                 )
               })}
             </tbody>
@@ -905,6 +1099,12 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
             {filtered.length} processo{filtered.length !== 1 ? 's' : ''}
           </span>
           <div className="flex items-center gap-5 flex-wrap">
+            {totalVProposta > 0 && (
+              <div className="flex flex-col items-end">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-text/35 font-montserrat">V. Proposta</span>
+                <span className="pv text-[13px] font-bold font-montserrat tabular-nums text-text/55">{formatCurrency(totalVProposta)}</span>
+              </div>
+            )}
             {totalHonorarios > 0 && (
               <div className="flex flex-col items-end">
                 <span className="text-[9px] font-semibold uppercase tracking-wider text-text/35 font-montserrat">Honorários</span>
@@ -927,6 +1127,303 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
         </div>
       </div>
 
+      {/* ── Mobile cards ──────────────────────────────────────── */}
+      <div className="md:hidden flex flex-col gap-3">
+        {filtered.slice(0, mobileVisible).map((p, idx) => {
+          const isExpanded = expandedRows.has(p.id)
+          const doneIds: string[] = (() => { try { return JSON.parse(p.checklistDone || '[]') } catch { return [] } })()
+          const rowAllItems = [...globalChecklistItems, ...checklistItems.filter(i => i.pericia_row === p.id)]
+          const rowDone = doneIds.filter(id => rowAllItems.some(i => i.id === id)).length
+          const rowTotal = rowAllItems.length
+          const rowPct = rowTotal > 0 ? Math.round((rowDone / rowTotal) * 100) : 0
+          const rowProgColor = rowPct === 100 ? '#22C55E' : rowPct > 60 ? '#D4AF37' : rowPct > 0 ? '#F97316' : ''
+          const propBadge = p.propostaStatus ? PROPOSTA_BADGE[p.propostaStatus] : null
+          const ds = dateStatus(p.entregaPrevista)
+
+          return (
+            <div
+              key={p.id}
+              data-fase={p.fase}
+              className="mobile-card rounded-2xl overflow-hidden"
+            >
+              {/* ── Topo: expand + nº + badge — sem botões de ação aqui ── */}
+              <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+                <button
+                  onClick={() => toggleExpand(p.id)}
+                  className="expand-btn w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  data-expanded={String(isExpanded)}
+                >
+                  <ChevronRight size={14} style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.25s' }} />
+                </button>
+                <span className="text-[11px] text-text/40 font-mono tabular-nums flex-shrink-0">{p.qtd || idx + 1}</span>
+                {/* FaseBadge isolado — sem concorrência com action buttons */}
+                <div className="flex-1 min-w-0">
+                  <FaseBadge fase={p.fase as Parameters<typeof FaseBadge>[0]['fase']} size="sm" />
+                </div>
+              </div>
+
+              {/* ── Nomes (toque para editar) ── */}
+              <div className="px-4 pb-2">
+                <EditableCell value={p.poloAtivo} campo="poloAtivo"
+                  syncing={syncingCells.has(`${p.id}:poloAtivo`)}
+                  renderDisplay={v => <span className="text-[15px] font-semibold text-text/90 leading-snug block">{toTitleCase(v) || '—'}</span>}
+                  onSave={v => handleSave(p.id, 'poloAtivo', v, p.poloAtivo)} />
+                <EditableCell value={p.poloPassivo} campo="poloPassivo"
+                  syncing={syncingCells.has(`${p.id}:poloPassivo`)}
+                  renderDisplay={v => <span className="text-[13px] text-text/55 leading-snug block mt-0.5">{toTitleCase(v) || '—'}</span>}
+                  onSave={v => handleSave(p.id, 'poloPassivo', v, p.poloPassivo)} />
+              </div>
+
+              {/* ── Progress + data de entrega ── */}
+              {(rowTotal > 0 || p.entregaPrevista) && (
+                <div className="px-4 pb-2 flex items-center gap-3">
+                  {rowTotal > 0 && (
+                    <>
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${rowPct}%`, background: rowProgColor || 'rgba(var(--color-text)/0.2)' }} />
+                      </div>
+                      <span className="text-[10px] font-bold tabular-nums flex-shrink-0" style={{ color: rowProgColor || 'var(--muted)' }}>{rowDone}/{rowTotal}</span>
+                    </>
+                  )}
+                  {p.entregaPrevista && (
+                    <span className={`text-[11px] tabular-nums flex-shrink-0 ${rowTotal > 0 ? '' : 'ml-auto'} ${ds === 'overdue' ? 'text-red-400/90 font-semibold' : ds === 'soon' ? 'text-orange-400/90 font-semibold' : 'text-text/45'}`}>
+                      {formatDate(p.entregaPrevista)}{ds === 'overdue' ? ' · Atrasado' : ds === 'soon' ? ' · Urgente' : ''}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* ── Barra de ações — linha dedicada, sem sobreposição ── */}
+              <div className="mobile-card-actions flex items-center justify-between px-3 py-2.5 gap-2">
+                {/* Primários: com label */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => { setPropostaRow(p.id); setExpandedRows(s => new Set(s).add(p.id)) }}
+                    className="flex items-center gap-1.5 h-9 px-3 rounded-xl text-[12px] font-semibold font-montserrat transition-all duration-150"
+                    style={{
+                      color: propBadge ? propBadge.text : 'var(--muted)',
+                      background: propBadge ? propBadge.bg : 'var(--surface-2)',
+                      border: `1px solid ${propBadge ? propBadge.border : 'var(--border)'}`,
+                    }}
+                  >
+                    <FileText size={13} />
+                    Proposta
+                  </button>
+                  <button
+                    data-codigo-btn
+                    className="flex items-center gap-1.5 h-9 px-3 rounded-xl text-[12px] font-semibold font-montserrat transition-all duration-150"
+                    onClick={e => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const pw = 260
+                      const left = Math.max(8, Math.min(rect.left, window.innerWidth - pw - 8))
+                      const top = rect.bottom + 4 > window.innerHeight - 200 ? rect.top - 172 : rect.bottom + 4
+                      setCodigoPopupPos({ top, left })
+                      setEditingCodigoRow(p.id)
+                    }}
+                    style={{
+                      color: p.codigoAcesso ? 'rgba(212,175,55,0.85)' : 'var(--muted)',
+                      background: p.codigoAcesso ? 'rgba(212,175,55,0.1)' : 'var(--surface-2)',
+                      border: p.codigoAcesso ? '1px solid rgba(212,175,55,0.28)' : '1px solid var(--border)',
+                    }}
+                  >
+                    <KeyRound size={13} />
+                    Código
+                  </button>
+                </div>
+
+                {/* Secundários: icon-only, alinhados à direita */}
+                <div className="flex items-center gap-1">
+                  <button
+                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150"
+                    style={{ color: 'var(--muted)', background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+                    onClick={() => handleArchive(p.id)}
+                    title="Arquivar"
+                    onMouseEnter={e => { e.currentTarget.style.color = 'rgba(245,158,11,0.85)'; e.currentTarget.style.background = 'rgba(245,158,11,0.1)'; e.currentTarget.style.borderColor = 'rgba(245,158,11,0.25)' }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+                  >
+                    <Archive size={14} />
+                  </button>
+                  <button
+                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 disabled:opacity-40"
+                    style={{ color: 'var(--muted)', background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+                    disabled={deleting === p.id}
+                    onClick={() => handleDelete(p.id)}
+                    title="Excluir permanente"
+                    onMouseEnter={e => { e.currentTarget.style.color = 'rgba(239,68,68,0.85)'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.25)' }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Conteúdo expandido ── */}
+              <div style={{ maxHeight: isExpanded ? '2400px' : '0', overflow: 'hidden', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)' }}>
+                <div className="mobile-expanded-section">
+                  {/* Campos editáveis em grid */}
+                  <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-4">
+
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Status</span>
+                      <EditableCell value={p.fase} campo="fase" type="select-fase"
+                        syncing={syncingCells.has(`${p.id}:fase`)}
+                        renderDisplay={v => <FaseBadge fase={v as Parameters<typeof FaseBadge>[0]['fase']} size="sm" />}
+                        onSave={v => handleSave(p.id, 'fase', v, p.fase)} />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Vara</span>
+                      <EditableCell value={p.vara} campo="vara"
+                        syncing={syncingCells.has(`${p.id}:vara`)}
+                        renderDisplay={v => <span className="text-[13px] text-text/75">{toTitleCase(v) || '—'}</span>}
+                        onSave={v => handleSave(p.id, 'vara', v, p.vara)} />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Cidade / UF</span>
+                      <div className="flex items-center gap-1.5">
+                        <EditableCell value={p.cidade} campo="cidade"
+                          syncing={syncingCells.has(`${p.id}:cidade`)}
+                          renderDisplay={v => <span className="text-[13px] text-text/75">{toTitleCase(v) || '—'}</span>}
+                          onSave={v => handleSave(p.id, 'cidade', v, p.cidade)} />
+                        {p.uf && <span className="text-[11px] text-text/40 flex-shrink-0">· {p.uf}</span>}
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Nº Processo</span>
+                      <EditableCell value={p.numeroProcesso} campo="numeroProcesso"
+                        className="font-mono text-[11px] tracking-wide"
+                        syncing={syncingCells.has(`${p.id}:numeroProcesso`)}
+                        onSave={v => handleSave(p.id, 'numeroProcesso', v, p.numeroProcesso)} />
+                    </div>
+
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Assunto</span>
+                      <EditableCell value={p.assunto} campo="assunto"
+                        syncing={syncingCells.has(`${p.id}:assunto`)}
+                        renderDisplay={v => <span className="text-[13px] text-text/75">{toTitleCase(v) || '—'}</span>}
+                        onSave={v => handleSave(p.id, 'assunto', v, p.assunto)} />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Honorários</span>
+                      <EditableCell value={p.valorHonorarios} campo="valorHonorarios" type="currency"
+                        syncing={syncingCells.has(`${p.id}:valorHonorarios`)}
+                        renderDisplay={v => <span className={`pv text-[14px] font-semibold ${v ? '' : 'text-text/30'}`} style={{ color: v ? 'var(--gold)' : undefined }}>{v ? formatCurrency(v) : '—'}</span>}
+                        onSave={v => handleSave(p.id, 'valorHonorarios', v, p.valorHonorarios)} />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Recebido</span>
+                      <EditableCell value={p.honorariosRecebidos} campo="honorariosRecebidos" type="currency"
+                        syncing={syncingCells.has(`${p.id}:honorariosRecebidos`)}
+                        renderDisplay={v => <span className={`pv text-[14px] font-semibold ${v ? 'text-green-400/85' : 'text-text/30'}`}>{v ? formatCurrency(v) : '—'}</span>}
+                        onSave={v => handleSave(p.id, 'honorariosRecebidos', v, p.honorariosRecebidos)} />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Tipo</span>
+                      <EditableCell value={p.tipo} campo="tipo" type="select-tipo"
+                        syncing={syncingCells.has(`${p.id}:tipo`)}
+                        renderDisplay={v => <span className={`text-[13px] font-semibold ${v === 'Particular' ? 'text-gold/90' : 'text-blue-400/80'}`}>{v === 'Assistência Judiciária Gratuita' ? 'AJG' : v || '—'}</span>}
+                        onSave={v => handleSave(p.id, 'tipo', v, p.tipo)} />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Origem</span>
+                      <EditableCell value={p.origem} campo="origem" type="select-origem"
+                        syncing={syncingCells.has(`${p.id}:origem`)}
+                        renderDisplay={v => <span className={`text-[13px] font-medium ${v === 'Indicação' ? 'text-purple-400/80' : 'text-text/65'}`}>{v || '—'}</span>}
+                        onSave={v => { handleSave(p.id, 'origem', v, p.origem); handleSave(p.id, 'valorHonorarios', calcHonorarios(p.valorPropostaHonorarios || '', v), p.valorHonorarios, true) }} />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Início</span>
+                      <EditableCell value={p.inicio} campo="inicio" type="date"
+                        syncing={syncingCells.has(`${p.id}:inicio`)}
+                        renderDisplay={v => <span className="text-[13px] text-text/70 tabular-nums">{formatDate(v) || '—'}</span>}
+                        onSave={v => handleSave(p.id, 'inicio', v, p.inicio)} />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-text/40 font-montserrat">Entrega</span>
+                      <EditableCell value={p.entregaPrevista} campo="entregaPrevista" type="date"
+                        syncing={syncingCells.has(`${p.id}:entregaPrevista`)}
+                        renderDisplay={v => {
+                          const s = dateStatus(v)
+                          if (!v) return <span className="text-[13px] text-text/30">—</span>
+                          return <span className={`text-[13px] tabular-nums font-semibold ${s === 'overdue' ? 'text-red-400/90' : s === 'soon' ? 'text-orange-400/90' : 'text-text/70'}`}>{formatDate(v)}</span>
+                        }}
+                        onSave={v => handleSave(p.id, 'entregaPrevista', v, p.entregaPrevista)} />
+                    </div>
+                  </div>
+
+                  {/* Checklist + Proposta */}
+                  <ExpandedPanel
+                    pericia={p}
+                    checklistItems={checklistItems}
+                    onUpdate={onUpdate}
+                    onOpenProposta={() => setPropostaRow(p.id)}
+                    onChecklistChange={refetchChecklist}
+                    onAddItem={handleAddItem}
+                  />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* ── Ver mais / Ver menos ── */}
+        {filtered.length > MOBILE_PAGE && (
+          mobileVisible < filtered.length ? (
+            <button
+              onClick={() => setMobileVisible(v => Math.min(v + MOBILE_PAGE, filtered.length))}
+              className="mobile-ver-mais w-full flex items-center justify-center gap-2 h-12 rounded-2xl font-montserrat font-semibold text-[13px] tracking-wide transition-all duration-200 active:scale-[0.98]"
+            >
+              <ChevronDown size={16} strokeWidth={2} />
+              Ver mais
+              <span className="mobile-ver-mais-badge inline-flex items-center justify-center rounded-full text-[11px] font-bold px-2 py-0.5" style={{ minWidth: 28 }}>
+                {filtered.length - mobileVisible}
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setMobileVisible(MOBILE_PAGE)}
+              className="mobile-ver-menos w-full flex items-center justify-center gap-2 h-11 rounded-2xl font-montserrat font-medium text-[12px] tracking-wide transition-all duration-200 active:scale-[0.98]"
+            >
+              <ChevronUp size={15} strokeWidth={2} />
+              Ver menos
+            </button>
+          )
+        )}
+
+        {/* Footer totais mobile */}
+        <div className="mobile-card-footer flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-xl">
+          <span className="text-[12px] font-semibold text-text/45 font-montserrat">{filtered.length} processo{filtered.length !== 1 ? 's' : ''}</span>
+          <div className="flex items-center gap-4 flex-wrap">
+            {totalHonorarios > 0 && (
+              <div className="flex flex-col items-end">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-text/35 font-montserrat">Honorários</span>
+                <span className="pv text-[13px] font-bold tabular-nums" style={{ color: 'var(--gold)' }}>{formatCurrency(totalHonorarios)}</span>
+              </div>
+            )}
+            {totalRecebido > 0 && (
+              <div className="flex flex-col items-end">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-text/35 font-montserrat">Recebido</span>
+                <span className="pv text-[13px] font-bold tabular-nums text-green-400/85">{formatCurrency(totalRecebido)}</span>
+              </div>
+            )}
+            {totalAReceber > 0 && (
+              <div className="flex flex-col items-end">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-text/35 font-montserrat">A Receber</span>
+                <span className="pv text-[13px] font-bold tabular-nums" style={{ color: '#8B5CF6' }}>{formatCurrency(totalAReceber)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Proposta Modal */}
       {propostaPericia && (
         <PropostaModal
@@ -935,6 +1432,82 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
           onSaved={onUpdate}
         />
       )}
+
+      {/* Código de Acesso popup — fixed, fora do overflow da tabela */}
+      {editingCodigoRow !== null && codigoPopupPos && (() => {
+        const ep = pericias.find(x => x.id === editingCodigoRow)
+        if (!ep) return null
+        return (
+          <div
+            data-codigo-popup
+            className="codigo-popup rounded-2xl flex flex-col gap-3 p-4"
+            style={{ position: 'fixed', top: codigoPopupPos.top, left: codigoPopupPos.left, zIndex: 9999, width: 260 }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <KeyRound size={13} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+                <span className="text-[11px] font-semibold uppercase tracking-wider font-montserrat" style={{ color: 'var(--gold)' }}>
+                  Código de Acesso
+                </span>
+              </div>
+              <button
+                onClick={() => { setEditingCodigoRow(null); setCodigoPopupPos(null) }}
+                className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                style={{ color: 'var(--muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'var(--text)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted)' }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+
+            {/* Input */}
+            <input
+              ref={codigoInputRef}
+              defaultValue={ep.codigoAcesso || ''}
+              onKeyDown={e => {
+                if (e.key === 'Enter') saveCodigoAcesso(editingCodigoRow, ep.codigoAcesso || '')
+                if (e.key === 'Escape') { setEditingCodigoRow(null); setCodigoPopupPos(null) }
+              }}
+              className="codigo-popup-input rounded-xl px-3 py-2.5 text-[13px] font-mono w-full"
+              placeholder="ex: AC2891"
+              maxLength={60}
+            />
+
+            {/* Botões */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const val = ep.codigoAcesso || codigoInputRef.current?.value || ''
+                  if (!val) return
+                  navigator.clipboard.writeText(val)
+                  toast.success('Código copiado', { duration: 1800 })
+                  setEditingCodigoRow(null)
+                  setCodigoPopupPos(null)
+                }}
+                disabled={!ep.codigoAcesso}
+                className="flex items-center justify-center gap-1.5 flex-1 py-2.5 rounded-xl text-[11px] font-semibold font-montserrat transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--muted)' }}
+                onMouseEnter={e => { if (ep.codigoAcesso) e.currentTarget.style.background = 'rgba(255,255,255,0.12)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)' }}
+              >
+                <Copy size={11} />
+                Copiar
+              </button>
+              <button
+                onClick={() => saveCodigoAcesso(editingCodigoRow, ep.codigoAcesso || '')}
+                className="flex-1 py-2.5 rounded-xl text-[11px] font-semibold font-cinzel tracking-wide transition-all duration-150"
+                style={{ background: 'rgba(212,175,55,0.2)', border: '1px solid rgba(212,175,55,0.4)', color: 'var(--gold)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,175,55,0.3)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(212,175,55,0.2)' }}
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        )
+      })()}
     </>
   )
 }

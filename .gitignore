@@ -3,6 +3,10 @@
 node_modules/
 .next/
 *.bak
+.claude/
+out/
+# dados reais de clientes/terceiros que a Gabi manda pra referência — nunca versionar
+Novos docx/
 
 # macOS
 .DS_Store

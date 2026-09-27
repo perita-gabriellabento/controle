@@ -118,9 +118,10 @@ export default function EditableCell({
 
   return (
     <div
-      className={`cell-hover group flex items-center gap-1.5 cursor-text min-h-[26px] px-1 -mx-1 rounded transition-colors duration-100 ${className}`}
-      onDoubleClick={() => { setEditing(true); setDraft(value) }}
-      title="Duplo clique para editar"
+      className={`cell-hover group flex items-center gap-1.5 cursor-pointer min-h-[40px] px-1 -mx-1 rounded transition-colors duration-100 ${className}`}
+      onClick={() => { setEditing(true); setDraft(value) }}
+      style={{ touchAction: 'manipulation' }}
+      title="Toque para editar"
     >
       {display}
       {syncing

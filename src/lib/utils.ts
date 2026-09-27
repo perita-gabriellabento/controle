@@ -88,3 +88,49 @@ export function valorParaExtenso(valor: number): string {
 export function formatValorBR(valor: number): string {
   return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+
+const SMALL_WORDS = new Set([
+  'de','da','do','das','dos','e','ou','a','o','as','os','em','com','para','por',
+  'no','na','nos','nas','num','numa','ao','aos','à','às','ante','até','após',
+  'sob','sobre','sem','entre','desde','via',
+])
+
+// Lista explícita de siglas — sempre maiúsculas independente do input
+const SIGLAS = new Set([
+  // Natureza jurídica
+  'LTDA','ME','SA','S/A','EPP','EIRELI','MEI','SS','SLU','SC','CIA','SCS','SNC',
+  // Bancos e financeiras
+  'BRB','CEF','BB','BTG','XP','C6','BCO','HSBC','BMG','BV','BNDES','CEI',
+  'SICREDI','SICOOB','BRADESCO','ITAÚ','ITAU','CAIXA',
+  // Tribunais e órgãos jurídicos
+  'STF','STJ','TST','TSE','TRF','TRT','TRE','TJ','TC','TCU','TCE','TCM',
+  'MPF','MPE','MPT','MPM','PGE','PGR','AGU','DPU','DPE','PGM',
+  // Entidades e conselhos
+  'OAB','CRC','CFC','CREA','CRM','CRF','CRP','CRECI','CFO',
+  // Órgãos e autarquias
+  'INSS','INPI','IBGE','ANATEL','ANEEL','ANS','ANP','ANVISA','IBAMA',
+  'BACEN','CVM','SUSEP','PREVIC','PGFN',
+  // Siglas fiscais e trabalhistas
+  'CPF','CNPJ','RG','CTF','FGTS','PIS','COFINS','CSLL','IRPJ','IRRF',
+  'IPTU','IPVA','ICMS','ISS','IOF','IPI','ITR','ITBI','ITCMD',
+  // Outros comuns em processos
+  'SFH','SFI','CEI','NIT','RAIS','DIRF','SPED','NF','NFS','NFe',
+  'ONG','OS','OSCIP','APL',
+])
+
+export function toTitleCase(s: string): string {
+  if (!s) return s
+  return s.trim().split(/\s+/).map((word, i) => {
+    // Separa sufixo de pontuação (ex: "LTDA." → base="LTDA", sufixo=".")
+    const match = word.match(/^(.*?)([.,;:!?]*)$/)
+    const base = match?.[1] ?? word
+    const suffix = match?.[2] ?? ''
+    // Sigla conhecida → sempre maiúscula
+    if (SIGLAS.has(base.toUpperCase())) return base.toUpperCase() + suffix
+    // Artigo/preposição (exceto na primeira posição)
+    const low = base.toLowerCase()
+    if (i > 0 && SMALL_WORDS.has(low)) return low + suffix
+    // Caso geral → Title Case
+    return low.charAt(0).toUpperCase() + low.slice(1) + suffix
+  }).join(' ')
+}

@@ -4,45 +4,44 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { toast } from 'sonner'
-import { isAuthenticated, verifyPin, createSession } from '@/lib/auth'
+import { isAuthenticated, login } from '@/lib/auth'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [pin, setPin] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [trustDevice, setTrustDevice] = useState(true)
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
   const [shake, setShake] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (isAuthenticated()) {
+    isAuthenticated().then(authed => {
+      if (authed) {
         router.replace('/dashboard')
       } else {
         setChecking(false)
-        setTimeout(() => inputRef.current?.focus(), 200)
+        setTimeout(() => emailRef.current?.focus(), 200)
       }
-    }
+    })
   }, [router])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (pin.length < 4) {
-      toast.error('PIN deve ter pelo menos 4 dígitos')
+    if (!email || password.length < 6) {
+      toast.error('Preencha e-mail e senha (mínimo 6 caracteres)')
       return
     }
     setLoading(true)
     try {
-      const ok = await verifyPin(pin)
-      if (!ok) {
+      const res = await login(email, password, trustDevice)
+      if (!res.ok) {
         setShake(true)
         setTimeout(() => setShake(false), 600)
-        toast.error('PIN incorreto', { description: 'Verifique e tente novamente.' })
-        setPin('')
-        setTimeout(() => inputRef.current?.focus(), 100)
+        toast.error('Não foi possível entrar', { description: 'Verifique e-mail e senha e tente novamente.' })
         return
       }
-      createSession()
       router.replace('/dashboard')
     } finally {
       setLoading(false)
@@ -57,10 +56,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center relative overflow-hidden">
-      {/* Noise texture */}
       <div className="noise-overlay" />
 
-      {/* Ambient glow blobs */}
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
         <div
           className="glow-blob absolute"
@@ -88,12 +85,9 @@ export default function LoginPage() {
         />
       </div>
 
-      {/* Card */}
       <div className="relative z-10 w-full max-w-[380px] mx-5">
-        {/* Logo section */}
         <div className="flex flex-col items-center mb-8 animate-fade-up">
           <div className="relative">
-            {/* Ambient glow behind logo */}
             <div
               className="absolute inset-0 -m-4 rounded-2xl blur-2xl"
               style={{ background: 'radial-gradient(ellipse, rgba(212,175,55,0.08) 0%, transparent 70%)' }}
@@ -110,7 +104,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Form card */}
         <div
           className="animate-fade-up-delay relative rounded-2xl p-8 overflow-hidden"
           style={{
@@ -119,7 +112,6 @@ export default function LoginPage() {
             boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
           }}
         >
-          {/* Top accent line */}
           <div
             className="absolute top-0 left-8 right-8 h-px"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.4), transparent)' }}
@@ -131,50 +123,62 @@ export default function LoginPage() {
             </span>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-7">
-            <div className="flex flex-col gap-3">
-              <label className="text-[10px] text-center tracking-[0.25em] uppercase text-gold/50 font-montserrat">
-                PIN de Acesso
-              </label>
-              <div
-                className="relative"
-                style={{
-                  animation: shake ? 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both' : 'none',
-                }}
-              >
-                <style>{`@keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-3px)}40%,60%{transform:translateX(3px)}}`}</style>
-                <input
-                  ref={inputRef}
-                  type="password"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={pin}
-                  onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
-                  maxLength={12}
-                  className="pin-input"
-                  placeholder="••••"
-                  disabled={loading}
-                  autoComplete="current-password"
-                />
-              </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5" style={{ animation: shake ? 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both' : 'none' }}>
+            <style>{`@keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-3px)}40%,60%{transform:translateX(3px)}}`}</style>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] tracking-[0.2em] uppercase text-gold/50 font-montserrat">E-mail</label>
+              <input
+                ref={emailRef}
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full rounded-lg px-3 py-2.5 text-[14px] text-text focus:outline-none focus:border-gold/60 transition-colors"
+                style={{ background: 'var(--comp-cell-input)', border: '1px solid var(--border)' }}
+                placeholder="seu@email.com"
+                disabled={loading}
+                autoComplete="email"
+              />
             </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] tracking-[0.2em] uppercase text-gold/50 font-montserrat">Senha</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full rounded-lg px-3 py-2.5 text-[14px] text-text focus:outline-none focus:border-gold/60 transition-colors"
+                style={{ background: 'var(--comp-cell-input)', border: '1px solid var(--border)' }}
+                placeholder="••••••••"
+                disabled={loading}
+                autoComplete="current-password"
+              />
+            </div>
+
+            <label className="flex items-center gap-2.5 cursor-pointer select-none mt-1">
+              <input
+                type="checkbox"
+                checked={trustDevice}
+                onChange={e => setTrustDevice(e.target.checked)}
+                className="w-4 h-4 rounded accent-[#D4AF37]"
+              />
+              <span className="text-[12px] text-text/50 font-montserrat">Confiar neste dispositivo</span>
+            </label>
 
             <button
               type="submit"
-              disabled={loading || pin.length < 4}
-              className="btn-gold-shimmer w-full h-12 rounded-xl font-cinzel text-[13px] tracking-[0.15em] font-semibold transition-all duration-300"
+              disabled={loading || !email || password.length < 6}
+              className="btn-gold-shimmer w-full h-12 rounded-xl font-cinzel text-[13px] tracking-[0.15em] font-semibold transition-all duration-300 mt-2"
               style={{ color: '#1A2535' }}
             >
-              {loading ? 'Verificando…' : 'Acessar Sistema'}
+              {loading ? 'Entrando…' : 'Acessar Sistema'}
             </button>
           </form>
 
-          {/* Bottom gold line */}
           <div className="absolute bottom-0 left-8 right-8 h-px"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.15), transparent)' }} />
         </div>
 
-        {/* Footer */}
         <div className="animate-fade-up-delay-2 mt-6 text-center">
           <p className="text-[10px] text-text/40 font-montserrat tracking-widest uppercase">
             Acesso restrito · Uso exclusivo

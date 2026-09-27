@@ -184,7 +184,6 @@ function handleGetChecklist() {
   var sheet = getChecklistSheet();
   if (!sheet) return jsonOk({ items: [] });
   var data = sheet.getDataRange().getValues();
-  if (data.length > 1) data.shift(); // remove header se houver
   var items = data.map(function(r) {
     var id = parseInt(r[0]) || 0;
     var descricao = String(r[1] || '').trim();
@@ -208,6 +207,7 @@ function doPost(e) {
     if (action === 'archive')         return handleArchive(body);
     if (action === 'addCustomTask')   return handleAddCustomTask(body);
     if (action === 'deleteCustomTask') return handleDeleteCustomTask(body);
+    if (action === 'delete')          return handleDelete(body);
     return jsonErr('action inválida: ' + action);
   } catch(err) {
     return jsonErr(err.message || String(err));
@@ -335,6 +335,22 @@ function handleDeleteCustomTask(body) {
     }
   }
   return jsonErr('tarefa não encontrada');
+}
+
+function handleDelete(body) {
+  var row = parseInt(body.row, 10);
+  if (isNaN(row) || row < 2) return jsonErr('row inválido');
+  var sheet = getSheet();
+  if (row > sheet.getLastRow()) return jsonErr('row fora do intervalo');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(8000);
+  try {
+    sheet.deleteRow(row);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  return jsonOk({ ok: true });
 }
 
 function handleArchive(body) {

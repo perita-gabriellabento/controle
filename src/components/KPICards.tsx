@@ -166,7 +166,7 @@ export default function KPICards({ pericias, activeFilter, onCardClick }: KPICar
 
             <div>
               <p
-                className={`text-[28px] font-bold font-montserrat leading-none tracking-tight${card.private ? ' pv' : ''}`}
+                className={`text-[22px] sm:text-[28px] font-bold font-montserrat leading-none tracking-tight${card.private ? ' pv' : ''}`}
                 style={{ color: card.accent }}
               >
                 {card.value}

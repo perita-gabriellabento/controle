@@ -15,7 +15,8 @@ export type SolicitarDocs = 'Sim' | 'Não' | ''
 export type PropostaStatus = 'Pendente' | 'Enviada' | 'Aceita' | 'Recusada' | ''
 
 export interface Pericia {
-  row: number
+  id: string
+  createdAt: string
   qtd: string
   origem: Origem
   poloAtivo: string
@@ -43,9 +44,9 @@ export interface Pericia {
 }
 
 export interface ChecklistItem {
-  id: number
+  id: string
   descricao: string
-  pericia_row?: number | null  // null/undefined = tarefa global; número = tarefa específica da perícia
+  pericia_row?: string | null  // null/undefined = tarefa global; id = tarefa específica da perícia
 }
 
 export interface AspeconItem {
@@ -64,26 +65,10 @@ export interface KPIs {
   emProposta: number
 }
 
-export interface UpdatePayload {
-  row: number
-  campo: keyof Pericia
-  valor: string
-  token: string
-}
-
-export interface GASResponse {
+export interface ApiResponse {
   ok: boolean
   error?: string
-  row?: number
-}
-
-export interface GASListResponse {
-  pericias: Pericia[]
-  lastModified?: string
-}
-
-export interface GASChecklistResponse {
-  items: ChecklistItem[]
+  id?: string
 }
 
 export const FASES: Fase[] = [

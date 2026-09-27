@@ -12,11 +12,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.ico" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <link rel="icon" type="image/x-icon" href="/controle/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/controle/favicon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/controle/apple-touch-icon.png" />
         {/* Evita flash de tema: aplica tema antes do primeiro paint */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
           }}
         />
       </head>

@@ -9,12 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Plus } from 'lucide-react'
 import { FASES, TIPOS, ORIGENS, UFS, type Pericia } from '@/lib/types'
 import { appendPericia, invalidateCache } from '@/lib/sheets'
+import { authedFetch } from '@/lib/supabaseClient'
 
 interface NovaPericiasProps {
   onCreated: () => void
 }
 
-const EMPTY: Omit<Pericia, 'row'> = {
+const EMPTY: Omit<Pericia, 'id' | 'createdAt'> = {
   qtd: '',
   origem: '',
   poloAtivo: '',
@@ -72,7 +73,10 @@ export default function NovaPericia({ onCreated }: NovaPericiasProps) {
 
   useEffect(() => {
     const proposta = parseFloat(form.valorPropostaHonorarios || '0') || 0
-    if (proposta <= 0) return
+    if (proposta <= 0) {
+      setForm(f => ({ ...f, valorHonorarios: '' }))
+      return
+    }
     const efetivo = form.origem === 'Indicação' ? +(proposta * 0.4).toFixed(2) : proposta
     setForm(f => ({ ...f, valorHonorarios: String(efetivo) }))
   }, [form.valorPropostaHonorarios, form.origem])
@@ -91,9 +95,16 @@ export default function NovaPericia({ onCreated }: NovaPericiasProps) {
     }
     setSaving(true)
     try {
-      const res = await appendPericia(form as Omit<Pericia, 'row'>)
+      const res = await appendPericia(form as Omit<Pericia, 'id' | 'createdAt'>)
       if (!res.ok) throw new Error(res.error || 'Erro ao salvar')
       invalidateCache()
+      if (res.id) {
+        authedFetch('/api/calendar/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ periciaId: res.id }),
+        }).catch(() => {})
+      }
       toast.success('Perícia adicionada com sucesso')
       reset()
       setOpen(false)
@@ -110,11 +121,11 @@ export default function NovaPericia({ onCreated }: NovaPericiasProps) {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="btn-gold-shimmer flex items-center gap-2 h-10 px-6 rounded-xl text-[13px] font-cinzel font-semibold tracking-[0.12em] flex-shrink-0"
+          className="btn-gold-shimmer flex items-center justify-center gap-2 h-10 w-10 sm:w-auto sm:px-6 rounded-xl text-[13px] font-cinzel font-semibold tracking-[0.12em] flex-shrink-0"
           style={{ color: '#1A2535' }}
         >
-          <Plus size={13} strokeWidth={2.5} />
-          Nova Perícia
+          <Plus size={15} strokeWidth={2.5} />
+          <span className="hidden sm:inline">Nova Perícia</span>
         </button>
       </DialogTrigger>
       <DialogContent>
@@ -124,7 +135,7 @@ export default function NovaPericia({ onCreated }: NovaPericiasProps) {
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4 p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
             {FIELDS.map(field => (
               <div key={field.key} className={`flex flex-col gap-1.5 ${field.gridCol || ''}`}>
                 <Label htmlFor={`nova-${field.key}`}>

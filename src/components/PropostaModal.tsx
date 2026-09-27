@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
-import { X, Download, Save, FileText, ChevronDown } from 'lucide-react'
+import { X, Download, Save, FileText, ChevronDown, Trash2 } from 'lucide-react'
 import { Pericia, ASPECON_TABLE, PROPOSTA_STATUS, type PropostaStatus } from '@/lib/types'
 import { saveProposta } from '@/lib/sheets'
 import { formatCurrency, valorParaExtenso, formatValorBR } from '@/lib/utils'
@@ -82,43 +82,59 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
   )
   const [status, setStatus] = useState<PropostaStatus>(p.propostaStatus as PropostaStatus || 'Pendente')
   const [eventoNum, setEventoNum] = useState('')
-  const [paginaDecisao, setPaginaDecisao] = useState('')
   const [descricao, setDescricao] = useState(buildDescricaoCaso(p))
   const [escopo, setEscopo] = useState(ESCOPO_PADRAO)
   const [itensEscopo, setItensEscopo] = useState<string[]>(ITENS_ESCOPO_PADRAO)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
-
-  // Update suggested value when category changes
-  useEffect(() => {
-    const item = ASPECON_TABLE.find(i => i.id === categoriaId)
-    if (item && !p.propostaValor) {
-      setValor(formatValorBR(item.valorMin))
-    }
-  }, [categoriaId, p.propostaValor])
+  const [valorFlash, setValorFlash] = useState(false)
 
   const selectedItem = ASPECON_TABLE.find(i => i.id === categoriaId)
+
+  function handleCategoriaChange(id: number) {
+    setCategoriaId(id)
+    const item = ASPECON_TABLE.find(i => i.id === id)
+    if (item) {
+      setValor(formatValorBR(item.valorMin))
+      setValorFlash(true)
+      setTimeout(() => setValorFlash(false), 600)
+    }
+  }
 
   function parseValor(): number {
     return parseFloat(valor.replace(/\./g, '').replace(',', '.')) || 0
   }
 
   async function handleSave() {
-    setSaving(true)
+    const valorNum = String(parseValor())
+    // saveProposta updates cache synchronously before the API call — safe to close immediately
+    const savePromise = saveProposta(p.id, status, valorNum, String(categoriaId))
+    onSaved()
+    onClose()
     try {
-      const valorNum = String(parseValor())
-      await saveProposta(p.row, status, valorNum, String(categoriaId))
-      toast.success('Proposta salva com sucesso')
-      onSaved()
-      onClose()
+      const res = await savePromise
+      if (!res.ok) throw new Error(res.error || 'Falha ao salvar')
+      toast.success('Proposta salva')
     } catch {
-      toast.error('Erro ao salvar proposta')
-    } finally {
-      setSaving(false)
+      toast.error('Erro ao salvar proposta — tente novamente')
     }
   }
 
-  async function handleGenerate() {
+  async function handleClearProposta() {
+    if (!confirm('Excluir a proposta deste processo? Os dados de valor e categoria serão removidos.')) return
+    const savePromise = saveProposta(p.id, '', '', '')
+    onSaved()
+    onClose()
+    try {
+      const res = await savePromise
+      if (!res.ok) throw new Error(res.error || 'Falha')
+      toast.success('Proposta excluída')
+    } catch {
+      toast.error('Erro ao excluir proposta — tente novamente')
+    }
+  }
+
+    async function handleGenerate() {
     setGenerating(true)
     try {
       const valorNum = parseValor()
@@ -133,7 +149,7 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
         polo_ativo: p.poloAtivo.toUpperCase() || '—',
         polo_passivo: p.poloPassivo.toUpperCase() || '—',
         evento_numero: eventoNum || 'XX',
-        pagina_decisao: paginaDecisao || 'XX',
+        pagina_decisao: '',
         descricao_caso: descricao,
         escopo_trabalhos: escopo,
         itens_escopo: formatItensEscopo(itensEscopo),
@@ -146,7 +162,7 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
         import('docxtemplater').then(m => m.default),
       ])
 
-      const response = await fetch('/template-proposta.docx?v=' + Date.now(), { cache: 'no-store' })
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/template-proposta.docx?v=` + Date.now(), { cache: 'no-store' })
       if (!response.ok) throw new Error('Template não encontrado')
       const arrayBuffer = await response.arrayBuffer()
       const zip = new PizZip(arrayBuffer)
@@ -161,7 +177,7 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `Proposta_${(p.numeroProcesso || p.row).toString().replace(/[^a-z0-9]/gi, '_')}.docx`
+      a.download = `Proposta_${(p.numeroProcesso || p.id).toString().replace(/[^a-z0-9]/gi, '_')}.docx`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -170,9 +186,9 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
       // Save status as Enviada after generating
       if (status === 'Pendente') {
         setStatus('Enviada')
-        await saveProposta(p.row, 'Enviada', String(parseValor()), String(categoriaId))
+        await saveProposta(p.id, 'Enviada', String(parseValor()), String(categoriaId))
       } else {
-        await saveProposta(p.row, status, String(parseValor()), String(categoriaId))
+        await saveProposta(p.id, status, String(parseValor()), String(categoriaId))
       }
       onSaved()
       toast.success('Proposta gerada e baixada!')
@@ -188,17 +204,22 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center modal-overlay"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl font-montserrat"
+        className="relative w-full max-w-2xl max-h-[94vh] sm:max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl font-montserrat mx-0 sm:mx-4"
         style={{
           background: 'linear-gradient(160deg, var(--comp-modal-from) 0%, var(--comp-modal-to) 100%)',
           border: '1px solid var(--border)',
           boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
         }}
       >
+        {/* Handle (mobile bottom sheet) */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border)' }} />
+        </div>
+
         {/* Header */}
         <div className="flex items-start justify-between p-6 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <div>
@@ -252,7 +273,7 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
               <div className="relative">
                 <select
                   value={categoriaId}
-                  onChange={e => setCategoriaId(parseInt(e.target.value))}
+                  onChange={e => handleCategoriaChange(parseInt(e.target.value))}
                   className="w-full appearance-none rounded-xl px-3 py-2.5 pr-8 text-[13px] text-text/80 outline-none cursor-pointer"
                   style={{
                     background: 'var(--comp-cell-input)',
@@ -283,10 +304,14 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
                 type="text"
                 value={valor}
                 onChange={e => setValor(e.target.value)}
-                className="w-full sm:w-36 rounded-xl px-3 py-2.5 text-[15px] text-gold font-bold text-center outline-none tabular-nums"
+                className="w-full sm:w-36 rounded-xl px-3 py-2.5 text-[15px] font-bold text-center outline-none tabular-nums"
                 style={{
-                  background: 'rgba(212,175,55,0.07)',
-                  border: '1px solid rgba(212,175,55,0.25)',
+                  background: valorFlash ? 'rgba(212,175,55,0.22)' : 'rgba(212,175,55,0.07)',
+                  border: `1px solid ${valorFlash ? 'rgba(212,175,55,0.7)' : 'rgba(212,175,55,0.25)'}`,
+                  color: valorFlash ? '#F5D76E' : 'var(--gold)',
+                  boxShadow: valorFlash ? '0 0 12px rgba(212,175,55,0.35)' : 'none',
+                  transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s',
+                  transform: valorFlash ? 'scale(1.04)' : 'scale(1)',
                 }}
                 placeholder="0,00"
               />
@@ -298,30 +323,17 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
             </div>
           </div>
 
-          {/* Evento e Página */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2.5">
-              <label className="text-[13px] uppercase tracking-[0.1em] text-text/60 font-semibold">Nº do Evento</label>
-              <input
-                type="text"
-                value={eventoNum}
-                onChange={e => setEventoNum(e.target.value)}
-                className="rounded-xl px-3 py-2.5 text-[13px] text-text/80 outline-none"
-                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-                placeholder="ex: 119"
-              />
-            </div>
-            <div className="flex flex-col gap-2.5">
-              <label className="text-[13px] uppercase tracking-[0.1em] text-text/60 font-semibold">Página da Decisão</label>
-              <input
-                type="text"
-                value={paginaDecisao}
-                onChange={e => setPaginaDecisao(e.target.value)}
-                className="rounded-xl px-3 py-2.5 text-[13px] text-text/80 outline-none"
-                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-                placeholder="ex: 91"
-              />
-            </div>
+          {/* Evento */}
+          <div className="flex flex-col gap-2.5">
+            <label className="text-[13px] uppercase tracking-[0.1em] text-text/60 font-semibold">Nº do Evento</label>
+            <input
+              type="text"
+              value={eventoNum}
+              onChange={e => setEventoNum(e.target.value)}
+              className="w-full rounded-xl px-3 py-2.5 text-[13px] text-text/80 outline-none"
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+              placeholder="ex: 119"
+            />
           </div>
 
           {/* Descrição do caso */}
@@ -350,14 +362,21 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 px-6 py-4" style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between gap-3 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]" style={{ borderTop: '1px solid var(--border)' }}>
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-[13px] text-text/50 hover:text-text/80 transition-colors"
           >
             Cancelar
           </button>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handleClearProposta}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] transition-all duration-150 text-red-400/60 hover:text-red-400 hover:bg-red-400/10"
+            >
+              <Trash2 size={12} />
+              Excluir proposta
+            </button>
             <button
               onClick={handleSave}
               disabled={saving}
