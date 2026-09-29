@@ -378,16 +378,22 @@ tr:hover .cell-edit-hint { opacity: 1; }
 .pericias-row-expanded { background: var(--comp-row-expanded) !important; }
 
 /* ─── Sticky frozen columns ──────────────────────────────── */
+/* `will-change: transform` foi removido de propósito — é feito pra elementos
+   animados via transform, não pra `position: sticky` (que se move via scroll).
+   Nas colunas congeladas isso causava a coluna "arrastar" um rastro visual
+   durante o scroll horizontal (bug conhecido de composição em Chrome/Safari
+   com <td>/<th> sticky). `contain: paint` isola o repaint de cada célula pra
+   não vazar pra vizinha. */
 .sticky-col {
   position: sticky;
   z-index: 2;
   background: var(--sticky-bg);
-  will-change: transform;
+  contain: paint;
 }
 .pericias-thead .sticky-col {
   z-index: 4;
   background: var(--comp-thead);
-  will-change: transform;
+  contain: paint;
 }
 .pericias-row-odd .sticky-col      { background: var(--sticky-bg-odd); }
 .pericias-row:hover .sticky-col    { background: var(--sticky-bg-hover) !important; }

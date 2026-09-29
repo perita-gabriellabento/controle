@@ -57,7 +57,7 @@ export default function KPICards({ pericias, activeFilter, onCardClick }: KPICar
       value: String(ativos.length),
       sub: 'processos ativos',
       icon: Scale,
-      accent: '#D4AF37',
+      accent: 'var(--gold)', // dourado puro (#D4AF37) tem contraste fraco sobre fundo branco no modo claro — var(--gold) já resolve pra um tom mais escuro (#B8960C) nesse tema
       glow: 'rgba(212,175,55,0.08)',
     },
     {
@@ -126,7 +126,7 @@ export default function KPICards({ pericias, activeFilter, onCardClick }: KPICar
             style={{
               opacity: isDimmed ? 0.4 : 1,
               transform: isActive ? 'translateY(-2px)' : undefined,
-              boxShadow: isActive ? `0 8px 24px -8px ${card.accent}40` : undefined,
+              boxShadow: isActive ? '0 8px 24px -8px rgba(0,0,0,0.35)' : undefined,
             }}
             title={card.id ? `Filtrar por: ${card.label}` : 'Mostrar todos'}
           >
