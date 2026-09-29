@@ -59,11 +59,18 @@ async function testAuthenticatedAccess() {
     else ok(`Gabi autenticada consegue ler ${table}`);
   }
 
-  const { data: sample } = await sbAnon.from('pericias').select('id').limit(1);
+  // Escreve o MESMO valor que já está lá (round-trip) — nunca um literal fixo,
+  // pra jamais corromper um dado real caso esse teste rode contra qualquer registro.
+  const { data: sample } = await sbAnon.from('pericias').select('id, cidade').limit(1);
   if (sample && sample[0]) {
-    const { error } = await sbAnon.from('pericias').update({ cidade: 'Goiânia' }).eq('id', sample[0].id);
+    const original = sample[0].cidade;
+    const { error } = await sbAnon.from('pericias').update({ cidade: original }).eq('id', sample[0].id);
     if (error) bad('Gabi autenticada NÃO consegue escrever em pericias: ' + error.message);
-    else ok('Gabi autenticada consegue escrever em pericias');
+    else {
+      const { data: check } = await sbAnon.from('pericias').select('cidade').eq('id', sample[0].id).single();
+      if (check && check.cidade === original) ok('Gabi autenticada consegue escrever em pericias (persistiu, dado original preservado)');
+      else bad('escrita não persistiu corretamente');
+    }
   }
 
   const { data: tokens, error: tokensErr } = await sbAnon.from('google_calendar_tokens').select('*').limit(1);
@@ -187,7 +194,20 @@ async function testRealDataQuality() {
 async function testDateExactness() {
   section('I) Datas migradas idênticas à fonte (sem deslocamento de fuso)');
   const r = await pgQuery("select numero_processo, entrega_prevista::text, inicio::text from pericias where entrega_prevista is not null order by numero_processo limit 8");
-  const { pericias: src } = await (await fetch(`${GAS_URL}?action=list&token=pericias_gb_2026`)).json();
+  // GAS (Google Apps Script) ocasionalmente devolve uma página de erro HTML transitória sob carga —
+  // retry simples evita que um soluço externo derrube a suíte inteira.
+  let src;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(`${GAS_URL}?action=list&token=pericias_gb_2026`);
+      const json = await res.json();
+      src = json.pericias;
+      break;
+    } catch (e) {
+      if (attempt === 3) { bad('não foi possível buscar a planilha de referência (GAS) após 3 tentativas: ' + e.message); return; }
+      await new Promise(r2 => setTimeout(r2, 1000 * attempt));
+    }
+  }
   let allOk = true;
   for (const row of r.rows) {
     const s = src.find(p => p.numeroProcesso === row.numero_processo);

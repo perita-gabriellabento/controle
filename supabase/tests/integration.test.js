@@ -78,15 +78,24 @@ async function main() {
   const { data: globalItems } = await sb.from('checklist_items').select('id').is('pericia_id', null).limit(1);
   if (globalItems && globalItems[0]) {
     const itemId = globalItems[0].id;
+    // Nunca apaga uma marcação que já existia antes do teste (poderia ser um "feito" real da Gabi) —
+    // só desfaz o que o próprio teste criou.
+    const { data: before } = await sb.from('pericia_checklist_done').select('*').eq('pericia_id', target.id).eq('checklist_item_id', itemId);
+    const jaEstavaMarcado = !!(before && before.length > 0);
+
     const { error: insErr } = await sb.from('pericia_checklist_done').insert({ pericia_id: target.id, checklist_item_id: itemId });
     if (insErr && !insErr.message.includes('duplicate')) { bad('marcar tarefa falhou: ' + insErr.message); }
     else {
       const { data: doneCheck } = await sb.from('pericia_checklist_done').select('*').eq('pericia_id', target.id).eq('checklist_item_id', itemId);
-      if (doneCheck.length === 1) ok('marcar tarefa funcionou');
+      if (doneCheck.length >= 1) ok('marcar tarefa funcionou');
       else bad('marcar tarefa não refletiu no banco');
-      const { error: delErr } = await sb.from('pericia_checklist_done').delete().eq('pericia_id', target.id).eq('checklist_item_id', itemId);
-      if (!delErr) ok('desmarcar tarefa funcionou');
-      else bad('desmarcar tarefa falhou: ' + delErr.message);
+      if (jaEstavaMarcado) {
+        ok('tarefa já estava marcada antes do teste — preservada sem alteração');
+      } else {
+        const { error: delErr } = await sb.from('pericia_checklist_done').delete().eq('pericia_id', target.id).eq('checklist_item_id', itemId);
+        if (!delErr) ok('desmarcar tarefa funcionou');
+        else bad('desmarcar tarefa falhou: ' + delErr.message);
+      }
     }
   } else {
     console.log('  (sem tarefas globais pra testar — pulado)');
