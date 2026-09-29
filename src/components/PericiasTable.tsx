@@ -939,12 +939,12 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
       <div className="hidden md:block rounded-xl pericias-table-wrapper" style={{ background: 'var(--comp-table-bg)', border: '1px solid var(--comp-table-wrapper-border)', boxShadow: 'var(--comp-table-shadow)' }}>
         <div ref={scrollRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 318px)', paddingBottom: '2px', scrollbarGutter: 'stable' }}>
           <table className="w-full text-[14px] font-montserrat pericias-table">
-            <thead className="sticky top-0 z-10 pericias-thead" style={{ background: 'var(--comp-thead)', backdropFilter: 'blur(8px)' }}>
+            <thead className="sticky top-0 z-10 pericias-thead" style={{ background: 'linear-gradient(180deg, #16233A 0%, #111C26 100%)', borderBottom: '2px solid rgba(212,175,55,0.35)' }}>
               <tr>
                 {/* Expand column — frozen 1 */}
-                <th className="sticky-col px-2 py-4" style={{ width: 44, minWidth: 44, left: 0 }} />
+                <th className="sticky-col px-2 py-4" style={{ width: 44, minWidth: 44, left: 0, zIndex: 5 }} />
                 {/* Action column — frozen 2 */}
-                <th className="sticky-col px-2 py-4" style={{ width: 136, minWidth: 136, left: 44 }}>
+                <th className="sticky-col px-2 py-4" style={{ width: 136, minWidth: 136, left: 44, zIndex: 4 }}>
                   <span className="text-[12px] font-semibold uppercase tracking-widest text-text/45">Ação</span>
                 </th>
                 {COLS.map((h, hi) => {
@@ -962,10 +962,11 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                       width: frozenWidth,
                       minWidth: frozenWidth,
                       left: hi === 0 ? 180 : hi === 1 ? 220 : 368,
+                      zIndex: hi === 0 ? 3 : hi === 1 ? 2 : 1,
                     } : undefined}
                     onClick={() => toggleSort(h.key)}
                   >
-                    <div className={`flex items-center gap-1 text-[12px] font-semibold uppercase tracking-widest text-text/55 group-hover:text-gold/80 transition-colors ${h.align === 'right' ? 'justify-end' : h.align === 'center' ? 'justify-center' : ''}`}>
+                    <div className={`flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-text/60 group-hover:text-gold transition-colors ${h.align === 'right' ? 'justify-end' : h.align === 'center' ? 'justify-center' : ''}`}>
                       {h.label}
                       <SortIcon col={h.key} sortKey={sortKey} sortDir={sortDir} />
                     </div>
@@ -994,7 +995,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                       className={`pericias-row transition-colors duration-100 ${isEven ? '' : 'pericias-row-odd'} ${isExpanded ? 'pericias-row-expanded' : ''}`}
                     >
                       {/* Expand button + mini progresso — frozen 1 */}
-                      <td className="sticky-col px-2 py-1.5 text-center" style={{ width: 44, minWidth: 44, left: 0 }}>
+                      <td className="sticky-col px-2 py-1.5 text-center" style={{ width: 44, minWidth: 44, left: 0, zIndex: 5 }}>
                         <div className="flex flex-col items-center gap-1.5">
                           <button
                             onClick={() => toggleExpand(p.id)}
@@ -1021,7 +1022,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                       </td>
 
                       {/* Action cell — frozen 2 */}
-                      <td className="sticky-col px-2 py-2.5" style={{ width: 136, minWidth: 136, left: 44 }}>
+                      <td className="sticky-col px-2 py-2.5" style={{ width: 136, minWidth: 136, left: 44, zIndex: 4 }}>
                         <div className="flex items-center gap-1 justify-center">
                           <button
                             onClick={() => { setPropostaRow(p.id); setExpandedRows(s => new Set(s).add(p.id)) }}
@@ -1096,17 +1097,17 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                       </td>
 
                       {/* qtd — frozen 3 */}
-                      <td className="sticky-col px-3 py-3 text-text/50 text-[11px] font-mono" style={{ width: 40, minWidth: 40, left: 180 }}>{p.qtd || idx + 1}</td>
+                      <td className="sticky-col px-3 py-3 text-text/50 text-[11px] font-mono" style={{ width: 40, minWidth: 40, left: 180, zIndex: 3 }}>{p.qtd || idx + 1}</td>
 
                       {/* poloAtivo — frozen 4 */}
-                      <td className="sticky-col px-3 py-3" style={{ width: 148, minWidth: 148, left: 220 }}>
+                      <td className="sticky-col px-3 py-3" style={{ width: 148, minWidth: 148, left: 220, zIndex: 2 }}>
                         <EditableCell value={p.poloAtivo} campo="poloAtivo"
                           syncing={syncingCells.has(`${p.id}:poloAtivo`)}
                           renderDisplay={v => <span className="text-text/85 text-[13px] font-medium leading-snug">{toTitleCase(v) || '—'}</span>}
                           onSave={v => handleSave(p.id, 'poloAtivo', v, p.poloAtivo)} />
                       </td>
                       {/* poloPassivo — frozen 5 (last frozen) */}
-                      <td className="sticky-col sticky-col-last px-3 py-3" style={{ width: 148, minWidth: 148, left: 368 }}>
+                      <td className="sticky-col sticky-col-last px-3 py-3" style={{ width: 148, minWidth: 148, left: 368, zIndex: 1 }}>
                         <EditableCell value={p.poloPassivo} campo="poloPassivo"
                           syncing={syncingCells.has(`${p.id}:poloPassivo`)}
                           renderDisplay={v => <span className="text-text/85 text-[13px] font-medium leading-snug">{toTitleCase(v) || '—'}</span>}
