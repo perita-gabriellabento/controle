@@ -1,93 +1,135 @@
 # Controle de Perícias — Gabriella Bento
 
-## REGRA ABSOLUTA — NUNCA REGRESSÃO DE CÓDIGO
+## ⚠️ Status atual (28/09/2026) — leia isto primeiro
 
-**Jamais deployar código que represente regressão.** Antes de qualquer deploy:
-1. Confirmar que o `out/` foi gerado pelo build mais recente (`npm run build`)
-2. Verificar timestamp dos arquivos fonte — todos devem ser anteriores ao build
-3. O `gh-pages` substitui a branch inteira pelo `out/` — nunca mistura com versões antigas
-4. Se houver dúvida, rodar `npm run build` novamente antes de deployar
+O projeto está em **migração da planilha Google Sheets para Supabase**, com integração nova de Google Calendar. Tudo isso vive no branch **`fase2-supabase`** (commit `2dbf8c8`), **a `main` continua intocada e é o que está publicado hoje** em produção (ainda na planilha/PIN antigos). Nada do que está descrito abaixo como "novo" está no ar ainda.
+
+### O que já está pronto e testado (branch `fase2-supabase`)
+- **Banco Supabase criado e migrado**: todos os 35 processos reais migrados da planilha, com auditoria numérica e de data confirmando zero divergência
+- **Schema relacional completo**: `supabase/schema.sql` — tabelas, RLS, triggers, grants
+- **App reescrito** pra falar com o Supabase em vez do Google Sheets (autenticação real por e-mail/senha, tempo real em vez de polling, `row`→`id`)
+- **Google Calendar**: OAuth com proteção CSRF, autenticação obrigatória em toda rota, cálculo de prazo por fase (dias úteis + feriados + recesso forense)
+- **63 testes automatizados** rodando contra o banco real e o servidor real (`npm run test:db`)
+- **Next.js atualizado** 14.2.29 → 14.2.35 (corrige vulnerabilidade de segurança)
+
+### ✅ Marcos concluídos (29/09/2026)
+- **App publicado no Vercel**: https://gabriellabento.com.br (domínio próprio, HTTPS válido, DNS na Locaweb)
+- **Google Calendar testado ponta a ponta em produção**: conexão OAuth, criação/edição/remoção de evento real confirmadas
+- **App OAuth do Google publicado ("In production")** — não expira mais em 7 dias
+- **Login + troca de senha testados de verdade** (não só no código) — funcionando, com olho de mostrar/ocultar senha
+- **Auditoria de segurança**: nenhum segredo vaza pro navegador nem pro repositório (testado com grep no bundle real e no site publicado)
+
+### O que falta
+1. **Enviar o branch `fase2-supabase` pro GitHub** — ainda bloqueado esperando autorização explícita do Robert (ação de push é sensível, pede confirmação sempre). App está rodando via deploy direto da CLI do Vercel, não via integração Git ainda.
+2. **Testar clicando de verdade a interface completa** (tabela, checklist, proposta) — o que foi testado até agora é auth + Calendar; a tabela/CRUD de perícias ainda não teve um clique real validado por alguém.
+3. **Confirmar com a Gabi**: tabela ASPECON 2026 (itens 32/33 idênticos a 2025 — checar com a associação) e o modelo de proposta corrigido.
+4. **Reconectar o Google Calendar uma vez** agora que o app está publicado (ela conectou originalmente ainda em modo "Testando" — reconectar garante token de geração definitiva).
+5. **Backfill do Calendar**: os 35 processos migrados da planilha nunca passaram pela sincronização — a agenda dela só vai ter eventos dos processos criados/editados depois da conexão. Rodar sincronização única pra popular os prazos já existentes (pendente de confirmação do Robert, já que cria ~30-70 eventos reais).
+6. **Fase 4 (visual)**: design já aprovado (mockup "Controle de Perícias"), ainda não aplicado nos componentes reais.
+
+### Inventário de recursos que NUNCA pode regredir
+Ver `INVENTARIO-DE-RECURSOS.md` — checklist de toda funcionalidade da versão antiga que tem que sobreviver na nova.
 
 ---
 
-## Stack
+## Stack (novo — Fase 2/3)
 
-- **Next.js 14** App Router, `output: 'export'` (static export)
-- **basePath:** `/controle` — `NEXT_PUBLIC_BASE_PATH=/controle`
-- **Tailwind CSS** + CSS variables para temas dark/light
-- **Backend:** Google Apps Script (GAS) REST — token `pericias_gb_2026`
-- **Fontes:** Cinzel + Montserrat (Google Fonts)
-- **Toasts:** Sonner
-- **Geração .docx:** docxtemplater + pizzip (client-side)
+- **Next.js 14.2.35** App Router — **sem** `output: 'export'` (precisa de rotas de servidor pro Calendar)
+- **Supabase**: Postgres + Auth + Realtime — substitui 100% o Google Sheets/Apps Script
+- **Google Calendar API**: sincronização unidirecional de prazos (OAuth2, `calendar.events` scope)
+- **Tailwind CSS** + CSS variables para temas dark/light (idêntico à versão anterior)
+- **Fontes:** Cinzel + Montserrat · **Toasts:** Sonner · **Geração .docx:** docxtemplater + pizzip (inalterado)
 
-## URLs e Repositório
+## Credenciais (Keychain macOS — nunca em arquivo de texto puro)
 
-- **Live:** https://perita-gabriellabento.github.io/controle/
-- **Repo:** https://github.com/perita-gabriellabento/controle
-- **Branch deploy:** `gh-pages`
-- **Diretório:** `/tmp/pericias-gabi` (symlink — ver abaixo)
+Ler com `security find-generic-password -a "$USER" -s "<nome>" -w`:
 
-> Todos os caminhos abaixo apontam para o **mesmo diretório físico** (mesmo inode — macOS case-insensitive):
-> - `/tmp/pericias-gabi` — symlink de trabalho
-> - `/Users/robertmarques/Dropbox/Documentos/Controle de Péricias - Gabi`
-> - `/Users/robertmarques/Dropbox/DOCUMENTOS/Controle de Péricias - Gabi`
->
-> Editar qualquer um reflete nos três automaticamente. Nunca há risco de dessincronização.
-> O symlink `/tmp/pericias-gabi` existe por causa de um bug do Next.js com caminhos Unicode/espaços.
-> **Sempre trabalhar via `/tmp/pericias-gabi`.**
+| Nome no Keychain | Pra que serve |
+|---|---|
+| `supabase-pericias-gabi-url` | Project URL do Supabase |
+| `supabase-pericias-gabi-publishable-key` | Chave pública (client-side, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) |
+| `supabase-pericias-gabi-secret-key` | Chave admin — **só servidor** (`SUPABASE_SECRET_KEY`), ignora RLS |
+| `supabase-pericias-gabi-db-password` | Senha do Postgres — só necessária pra conexão direta (scripts de migração/teste) |
+| `supabase-pericias-gabi-temp-password` | Senha temporária de login da Gabi (`bentogabriella97@gmail.com`) — trocar quando ela começar a usar de verdade |
+| `google-calendar-pericias-client-id` / `-client-secret` | OAuth Client do Google Cloud (projeto "Pericias GB Calendar") — servidor apenas |
+| `vercel-pericias-gabi-token` | Token de deploy do Vercel — **cuidado**: o primeiro que o Robert mandou era de um produto errado (AI Gateway), precisa confirmar que é um Access Token de verdade (Settings → Tokens) |
 
-## Deploy
+Variáveis completas em `.env.local` (nunca commitado, está no `.gitignore`).
 
-Conta GitHub: **perita-gabriellabento**  
-Token salvo no keychain macOS.
+## Arquitetura de dados (Supabase)
 
+Ver `supabase/schema.sql` pra DDL completo. Resumo:
+- **`pericias`** — substitui a planilha, `id uuid` (não mais número de linha), `CHECK` constraints em vez de texto livre pra fase/tipo/origem/status, `fase_changed_at` (atualizado por trigger só quando a fase muda de verdade — base do cálculo de prazo)
+- **`checklist_items`** — `pericia_id` nulo = tarefa global, preenchido = específica (cascade delete)
+- **`pericia_checklist_done`** — junção; existir a linha = tarefa concluída (substitui o JSON `"[1,3,5]"` de antes)
+- **`fase_prazos`** — dias de prazo por fase (úteis/corridos), confirmados com a Gabi (ver histórico de memória do projeto)
+- **`google_calendar_tokens`** — singleton, só `service_role` acessa (RLS sem nenhuma policy)
+- **`oauth_pending_state`** — nonce anti-CSRF do fluxo OAuth do Calendar, singleton, expira em 5min
+- **RLS**: qualquer usuária autenticada tem acesso completo (só existe uma usuária prevista — a Gabi); `anon` bloqueado em tudo
+
+`ASPECON_TABLE` (33 categorias de honorários) continua constante no código (`src/lib/types.ts`), nunca virou tabela — são dados fixos que raramente mudam.
+
+## Camada de dados no app
+
+- `src/lib/supabaseClient.ts` — client do browser, com storage dinâmico pra "Confiar neste dispositivo" (localStorage vs sessionStorage) + `authedFetch()` (anexa o token de sessão nas chamadas às rotas de API)
+- `src/lib/supabaseAdmin.ts` — client de servidor com a secret key. **Nunca importar de um componente `'use client'`.**
+- `src/lib/auth.ts` — `login`/`logout`/`isAuthenticated`/`changePassword`/`onAuthChange`
+- `src/lib/sheets.ts` — mantém o nome do arquivo (histórico) mas fala 100% com Supabase agora: `fetchPericias`, `updatePericia`, `appendPericia`, `saveChecklistStatus` etc., mais `subscribeToChanges()` (Realtime, substitui o polling de 30s)
+- `src/lib/businessDays.ts` — cálculo de prazo (dias úteis/corridos), feriados nacionais (fixos + móveis via Páscoa) + recesso forense (20/dez–20/jan)
+- `src/lib/googleCalendar.ts` + `src/lib/apiAuth.ts` — só usados pelas rotas de API (`src/app/api/calendar/**`)
+
+## Google Calendar — como funciona
+
+Unidirecional: o app só cria/atualiza/apaga eventos, nunca lê a agenda da Gabi de volta. Cada perícia pode ter até 3 eventos (dia inteiro, nunca `dateTime`, pra não ter bug de fuso):
+1. **Início** (`google_event_id_inicio`)
+2. **Entrega prevista** (`google_event_id_entrega`)
+3. **Prazo da fase atual** (`google_event_id_prazo_fase`) — o mais urgente, calculado a partir de `fase_changed_at` + `fase_prazos`
+
+Os eventos vão pro **calendário principal** da Gabi (não um secundário dedicado — tentei isso primeiro, mas criar calendário novo exige escopo `calendar` amplo; mantive o escopo mínimo `calendar.events` e distingo visualmente com o prefixo `⚖️` no título). Avisos escalonados: 7 dias antes, 3 dias antes, 1 dia antes, no dia (pop-up + e-mail nos mais próximos). `POST /api/calendar/sync {periciaId}` reconcilia os 3 sempre a partir do estado atual do banco (nunca do que o client mandou) — pode ser chamado quantas vezes quiser, nunca duplica evento, nunca deixa "alarme falso" de fase antiga. `DELETE /api/calendar/sync` limpa tudo antes de excluir uma perícia permanentemente.
+
+**Toda rota de `/api/calendar/*` exige `Authorization: Bearer <token de sessão>`** — sem isso, 401. O fluxo de conexão usa `state` anti-CSRF (tabela `oauth_pending_state`, expira em 5min, invalidado no primeiro uso).
+
+**Risco conhecido:** app OAuth ainda em "Testing" no Google Cloud — token pode expirar em 7 dias. Falta o domínio verificado (`gabriellabento.com.br`, pendente do deploy) pra publicar em produção sem essa limitação.
+
+## Testes — `npm run test:db`
+
+63 testes automatizados, nessa ordem, todos rodando contra o banco/servidor real (não é mock):
+1. `supabase/tests/businessDays.test.js` — Páscoa, feriados, recesso forense, contagem de dias úteis
+2. `supabase/tests/schema.test.js` — RLS (autenticado × anônimo em toda tabela), CHECK constraints, cascade delete, triggers, qualidade dos dados migrados
+3. `supabase/tests/integration.test.js` — simula o fluxo real do app logado como a Gabi
+4. `supabase/tests/api-security.test.js` — sobe o servidor Next.js de verdade e ataca as próprias rotas do Calendar (sem auth, CSRF forjado, replay de state)
+
+Sempre rodar antes de considerar qualquer mudança de backend "pronta".
+
+## Deploy (mudou — não é mais GitHub Pages)
+
+Como agora tem rotas de servidor (Calendar), não dá mais pra usar `output: 'export'`/GitHub Pages. Alvo é **Vercel**. Processo (em construção, ver seção de status no topo):
 ```bash
-# Recuperar token:
-security find-internet-password -s github.com -a perita-gabriellabento -w
-
-# Build + deploy completo:
-cd /tmp/pericias-gabi
-npm run build
-TOKEN=$(security find-internet-password -s github.com -a perita-gabriellabento -w)
-npx gh-pages -d out -b gh-pages --repo https://perita-gabriellabento:${TOKEN}@github.com/perita-gabriellabento/controle.git
+npx vercel --token "$(security find-generic-password -a "$USER" -s "vercel-pericias-gabi-token" -w)"
 ```
+Configurar as mesmas variáveis de `.env.local` no painel do Vercel (Settings → Environment Variables), trocando `APP_URL` de `http://localhost:3000` pra URL real do deploy.
 
-> A conta `lifeb-web` configurada no `gh auth` padrão **não tem acesso** ao repo. Sempre usar o token da `perita-gabriellabento` na URL.
+**Regra permanente, herdada da versão antiga:** nunca deployar código que represente regressão. Antes de qualquer deploy: rodar `npm run test:db`, `npx tsc --noEmit` e `npm run build` — todos precisam passar limpo.
 
-## Arquivos principais
+## Padrões de código (mantidos da versão anterior)
+
+- **Otimismo primeiro:** atualizar cache local antes da API, reverter em erro
+- **Debounce 800ms** nas edições inline
+- **Undo via toast** (3s), sempre persiste o revert no servidor também
+- **Sticky columns / Title Case / popups fixed** — inalterados, ver `globals.css` e `utils.ts`
+- **Retry com backoff** em toda escrita idempotente nova (update/delete), nunca em insert (evita duplicar registro se a rede falhar)
+
+## Arquivos principais (atualizados)
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `src/app/dashboard/page.tsx` | Página principal — load, filtros, header |
-| `src/components/PericiasTable.tsx` | Tabela (~1150 linhas) — edição inline, sticky cols, popup |
-| `src/components/PropostaModal.tsx` | Modal de proposta de honorários |
-| `src/components/FilterBar.tsx` | Barra de filtros |
-| `src/components/KPICards.tsx` | Cards de KPI clicáveis |
-| `src/components/NovaPericia.tsx` | Formulário de cadastro |
-| `src/components/EditableCell.tsx` | Célula editável genérica |
-| `src/lib/sheets.ts` | Cache + chamadas ao GAS (fetchPericias, fetchChecklist, etc.) |
-| `src/lib/utils.ts` | formatCurrency, toTitleCase, valorParaExtenso, formatDate... |
-| `src/lib/types.ts` | Tipos TypeScript + ASPECON_TABLE |
-| `src/app/globals.css` | CSS variables, temas, sticky columns, animações |
-| `public/template-proposta.docx` | Template Word para geração de proposta |
-
-## Padrões de código
-
-- **Otimismo primeiro:** atualizar cache local (`updateCache`) antes da API, reverter em erro
-- **Debounce 800ms** nas edições inline — cancelar timer anterior se campo editado de novo
-- **Undo via toast** (3s) — sempre persiste o revert no servidor via `updatePericia`
-- **useMemo** para listas filtradas, totais do footer, checklistItems globais
-- **Sticky columns:** `border-collapse: separate; border-spacing: 0` + `position: sticky` + `will-change: transform` + backgrounds com `!important` no light mode
-- **Title Case:** `toTitleCase()` preserva siglas em CAIXA ALTA (LTDA, ME, S/A, BRB, C6, etc.)
-- **Popups fixed:** usar `getBoundingClientRect()` + `position: fixed` + clamping de viewport
-
-## Tema light mode — atenção CSS
-
-A regra `[data-theme="light"] .pericias-table tbody .pericias-row td { background: #FFFFFF }` tem especificidade alta e sobrescreve o background das sticky cols. As sticky cols em light mode precisam de `!important` explícito para manter o background correto durante o scroll.
-
-## Checklist e deploy checklist de tarefas
-
-- Checklist global vem da aba "Checklist" da planilha via GAS
-- Estado salvo por perícia no campo `checklistDone` (JSON array de IDs)
-- Tarefas custom por perícia: `addCustomTask` / `deleteCustomTask`
-- Cache de checklist: 5 minutos (`300_000ms`) — `getChecklistCacheSync()` para init síncrono
+| `src/app/dashboard/page.tsx` | Página principal — agora com Realtime, Configurações com botão do Calendar |
+| `src/app/page.tsx` | Login — e-mail/senha + "Confiar neste dispositivo" |
+| `src/lib/sheets.ts` | Camada de dados — Supabase (nome do arquivo é histórico) |
+| `src/lib/auth.ts`, `supabaseClient.ts`, `supabaseAdmin.ts`, `apiAuth.ts` | Autenticação (client e servidor) |
+| `src/lib/businessDays.ts`, `googleCalendar.ts` | Lógica do Calendar |
+| `src/app/api/calendar/**` | Rotas de servidor (connect, callback, sync, status) |
+| `src/components/PericiasTable.tsx` | Tabela — mesma UI de antes, `id` no lugar de `row` |
+| `supabase/schema.sql` | Fonte da verdade do schema do banco |
+| `supabase/tests/*.test.js` | Suíte de testes (rodar com `npm run test:db`) |
+| `pericias-proxy.gs`, planilha Google | **Ainda existem, intocados** — rede de segurança até o corte final (ver plano de fases) |

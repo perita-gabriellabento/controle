@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { ensurePericiasCalendar } from '@/lib/googleCalendar'
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
@@ -49,7 +48,10 @@ export async function GET(req: NextRequest) {
       return fail('sem_refresh_token', 'Google não retornou refresh_token — provavelmente já autorizado antes sem revogar. Peça pra revogar em myaccount.google.com/permissions e conectar de novo.')
     }
 
-    const calendarId = await ensurePericiasCalendar(tokens.access_token)
+    // Escopo é só "calendar.events" de propósito (mínimo necessário) — criar um
+    // calendário secundário exigiria a permissão ampla "calendar" (acesso a
+    // todos os calendários dela), então os eventos vão pro calendário principal
+    // mesmo; o prefixo no título (ver googleCalendar.ts) evita confusão visual.
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
     const { error } = await supabaseAdmin.from('google_calendar_tokens').upsert({
@@ -57,7 +59,7 @@ export async function GET(req: NextRequest) {
       refresh_token: tokens.refresh_token,
       access_token: tokens.access_token,
       access_token_expires_at: expiresAt,
-      calendar_id: calendarId,
+      calendar_id: 'primary',
     })
     if (error) return fail('falha_ao_salvar', error.message)
 

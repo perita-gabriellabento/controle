@@ -58,19 +58,20 @@ export interface DeadlineEvent {
 export async function upsertDeadlineEvent(existingEventId: string | null, event: DeadlineEvent): Promise<string> {
   const { accessToken, calendarId } = await getAccessToken()
   const body = {
-    summary: event.title,
+    summary: `⚖️ ${event.title}`, // prefixo pra destacar entre os compromissos pessoais do calendário principal
     description: event.description,
     start: { date: event.dateISO },
     end: { date: event.dateISO },
+    // Google permite no máximo 5 overrides por evento — no dia (o mais crítico)
+    // manda nos dois canais, os demais só popup.
     reminders: {
       useDefault: false,
       overrides: [
         { method: 'popup', minutes: 7 * 24 * 60 },
-        { method: 'email', minutes: 7 * 24 * 60 },
         { method: 'popup', minutes: 3 * 24 * 60 },
         { method: 'popup', minutes: 1 * 24 * 60 },
-        { method: 'email', minutes: 1 * 24 * 60 },
         { method: 'popup', minutes: 0 },
+        { method: 'email', minutes: 0 },
       ],
     },
   }
@@ -98,23 +99,4 @@ export async function deleteDeadlineEvent(eventId: string): Promise<void> {
   if (!res.ok && res.status !== 404 && res.status !== 410) {
     throw new Error(`Falha ao remover evento do Calendar: ${res.status} ${await res.text()}`)
   }
-}
-
-// Garante que existe um calendário secundário "Perícias" dedicado, em vez de usar
-// o calendário pessoal principal dela. Roda uma vez, no momento da conexão OAuth.
-export async function ensurePericiasCalendar(accessToken: string): Promise<string> {
-  const listRes = await fetch(`${CALENDAR_API}/users/me/calendarList`, { headers: { Authorization: `Bearer ${accessToken}` } })
-  if (listRes.ok) {
-    const list = await listRes.json()
-    const existing = (list.items || []).find((c: any) => c.summary === 'Perícias')
-    if (existing) return existing.id
-  }
-  const createRes = await fetch(`${CALENDAR_API}/calendars`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ summary: 'Perícias' }),
-  })
-  if (!createRes.ok) throw new Error(`Falha ao criar calendário "Perícias": ${createRes.status} ${await createRes.text()}`)
-  const created = await createRes.json()
-  return created.id
 }

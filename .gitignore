@@ -10,3 +10,6 @@ Novos docx/
 
 # macOS
 .DS_Store
+.vercel
+backups/
+tsconfig.tsbuildinfo

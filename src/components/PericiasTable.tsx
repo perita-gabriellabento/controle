@@ -514,7 +514,7 @@ function sortByFilter(list: Pericia[], sortBy: string): Pericia[] {
   return [...sortGroup(active), ...sortGroup(entregue)]
 }
 
-const MOBILE_PAGE = 10
+const MOBILE_PAGE = 50 // caseload real da Gabi (~35) cabe inteiro sem precisar tocar "Ver mais"
 
 // ── Main table ────────────────────────────────────────────────
 

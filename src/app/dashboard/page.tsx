@@ -47,6 +47,7 @@ function DashboardContent() {
   const [pinDialogOpen, setPinDialogOpen] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [savingPin, setSavingPin] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [privacyMode, setPrivacyMode] = useState(false)
@@ -324,15 +325,29 @@ function DashboardContent() {
             <div className="flex flex-col gap-4 p-6">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="np">Nova senha (mínimo 6 caracteres)</Label>
-                <Input id="np" type="password"
-                  value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                  placeholder="••••••••" />
+                <div className="relative">
+                  <Input id="np" type={showNewPassword ? 'text' : 'password'} className="pr-10"
+                    value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                    placeholder="••••••••" />
+                  <button type="button" onClick={() => setShowNewPassword(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text/35 hover:text-gold/70 transition-colors" tabIndex={-1}
+                    title={showNewPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                    {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="cp">Confirmar Nova Senha</Label>
-                <Input id="cp" type="password"
-                  value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••" />
+                <div className="relative">
+                  <Input id="cp" type={showNewPassword ? 'text' : 'password'} className="pr-10"
+                    value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••" />
+                  <button type="button" onClick={() => setShowNewPassword(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text/35 hover:text-gold/70 transition-colors" tabIndex={-1}
+                    title={showNewPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                    {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-2 pt-2" style={{ borderTop: '1px solid var(--border)' }}>

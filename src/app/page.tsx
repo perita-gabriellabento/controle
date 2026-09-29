@@ -4,12 +4,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { toast } from 'sonner'
+import { Eye, EyeOff } from 'lucide-react'
 import { isAuthenticated, login } from '@/lib/auth'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [trustDevice, setTrustDevice] = useState(true)
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -143,16 +145,27 @@ export default function LoginPage() {
 
             <div className="flex flex-col gap-2">
               <label className="text-[10px] tracking-[0.2em] uppercase text-gold/50 font-montserrat">Senha</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full rounded-lg px-3 py-2.5 text-[14px] text-text focus:outline-none focus:border-gold/60 transition-colors"
-                style={{ background: 'var(--comp-cell-input)', border: '1px solid var(--border)' }}
-                placeholder="••••••••"
-                disabled={loading}
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full rounded-lg px-3 py-2.5 pr-10 text-[14px] text-text focus:outline-none focus:border-gold/60 transition-colors"
+                  style={{ background: 'var(--comp-cell-input)', border: '1px solid var(--border)' }}
+                  placeholder="••••••••"
+                  disabled={loading}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text/35 hover:text-gold/70 transition-colors"
+                  tabIndex={-1}
+                  title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             <label className="flex items-center gap-2.5 cursor-pointer select-none mt-1">
