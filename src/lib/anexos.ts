@@ -1,6 +1,7 @@
 'use client'
 
 import { supabase } from './supabaseClient'
+import { withRetry } from './utils'
 
 export interface Anexo {
   id: string
@@ -35,7 +36,7 @@ function dbToAnexo(row: any): Anexo {
 }
 
 export async function fetchAnexos(periciaId: string): Promise<Anexo[]> {
-  const { data, error } = await supabase.from('pericia_anexos').select('*').eq('pericia_id', periciaId).order('created_at')
+  const { data, error } = await withRetry<any[]>(() => supabase.from('pericia_anexos').select('*').eq('pericia_id', periciaId).order('created_at') as any)
   if (error) throw new Error(error.message)
   return (data || []).map(dbToAnexo)
 }
@@ -70,15 +71,15 @@ export async function uploadAnexo(periciaId: string, file: File): Promise<{ ok: 
 }
 
 export async function deleteAnexo(anexo: Anexo): Promise<{ ok: boolean; error?: string }> {
-  const { error: storageErr } = await supabase.storage.from(BUCKET).remove([anexo.storagePath])
+  const { error: storageErr } = await withRetry(() => supabase.storage.from(BUCKET).remove([anexo.storagePath]) as any)
   if (storageErr) return { ok: false, error: storageErr.message }
-  const { error: dbErr } = await supabase.from('pericia_anexos').delete().eq('id', anexo.id)
+  const { error: dbErr } = await withRetry(() => supabase.from('pericia_anexos').delete().eq('id', anexo.id) as any)
   if (dbErr) return { ok: false, error: dbErr.message }
   return { ok: true }
 }
 
 export async function getAnexoUrl(storagePath: string): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60)
+  const { data, error } = await withRetry<any>(() => supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60) as any)
   if (error) return null
   return data.signedUrl
 }

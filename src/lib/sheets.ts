@@ -6,6 +6,7 @@
 
 import { supabase } from './supabaseClient'
 import { Pericia, ChecklistItem, ApiResponse } from './types'
+import { withRetry } from './utils'
 
 let _cache: Pericia[] | null = null
 let _cacheTs = 0
@@ -14,19 +15,9 @@ const CACHE_TTL = 30_000
 let _checklistCache: ChecklistItem[] | null = null
 let _checklistCacheTs = 0
 
-// ── Retry com backoff — só em operações idempotentes (select/update/delete).
+// withRetry mora em utils.ts agora — compartilhado com anexos.ts, evita duplicar o mecanismo.
 // Nunca aplicado a insert (appendPericia/addCustomTask): reenviar um insert que na
 // verdade já teve sucesso no servidor (resposta perdida na rede) duplicaria a linha.
-async function withRetry<T>(fn: () => PromiseLike<{ data: T; error: any }>, attempts = 3): Promise<{ data: T; error: any }> {
-  let last: { data: T; error: any } = { data: null as T, error: new Error('sem tentativa') }
-  for (let i = 0; i < attempts; i++) {
-    last = await fn()
-    if (!last.error) return last
-    if (i === attempts - 1) return last
-    await new Promise(r => setTimeout(r, 300 * Math.pow(2, i)))
-  }
-  return last
-}
 
 // ── Mapeamento camelCase (app) <-> snake_case (banco) ──────────
 

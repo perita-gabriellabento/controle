@@ -134,3 +134,17 @@ export function toTitleCase(s: string): string {
     return low.charAt(0).toUpperCase() + low.slice(1) + suffix
   }).join(' ')
 }
+
+// Retry com espera crescente — só pra operações idempotentes (leitura, update, delete).
+// Nunca usar em insert/create: reexecutar depois de uma falha de rede poderia duplicar
+// o registro (o servidor pode ter criado na primeira tentativa e só a resposta se perdido).
+export async function withRetry<T>(fn: () => PromiseLike<{ data: T; error: any }>, attempts = 3): Promise<{ data: T; error: any }> {
+  let last: { data: T; error: any } = { data: null as T, error: new Error('sem tentativa') }
+  for (let i = 0; i < attempts; i++) {
+    last = await fn()
+    if (!last.error) return last
+    if (i === attempts - 1) return last
+    await new Promise(r => setTimeout(r, 300 * Math.pow(2, i)))
+  }
+  return last
+}
