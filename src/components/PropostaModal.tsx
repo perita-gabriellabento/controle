@@ -40,8 +40,10 @@ function suggestCategory(assunto: string): number {
 }
 
 function buildDescricaoCaso(p: Pericia): string {
-  return `No caso em exame, a perícia contábil foi determinada com a finalidade de ${p.assunto || 'analisar a matéria técnico-contábil objeto da demanda'}, conforme determinado nos autos do processo ${p.numeroProcesso}, em que litigam ${p.poloAtivo} (Requerente/Polo Ativo) e ${p.poloPassivo} (Requerido/Polo Passivo).`
+  return `No caso em exame, a perícia contábil foi determinada com a finalidade de ${p.assunto || 'analisar a matéria técnico-contábil objeto da demanda'}, conforme determinado nos autos do processo ${p.numeroProcesso}.`
 }
+
+const TRECHO_DECISAO_PADRAO = `Nomeio para a realização da perícia contábil a perita GABRIELLA BENTO DE OLIVEIRA, CRC/GO n° 028466/O-5, que deverá ser intimada pessoalmente para dizer se aceita o encargo e, em caso afirmativo, apresentar proposta de honorários no prazo de 05 (cinco) dias.`
 
 const ESCOPO_PADRAO = `A execução dos trabalhos periciais demandará análise técnica dos documentos constantes nos autos, exame dos contratos e registros contábeis objeto da demanda, realização dos cálculos pertinentes e elaboração do laudo pericial contábil.`
 
@@ -82,6 +84,8 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
   )
   const [status, setStatus] = useState<PropostaStatus>(p.propostaStatus as PropostaStatus || 'Pendente')
   const [eventoNum, setEventoNum] = useState('')
+  const [paginaDecisao, setPaginaDecisao] = useState('')
+  const [trechoDecisao, setTrechoDecisao] = useState(TRECHO_DECISAO_PADRAO)
   const [descricao, setDescricao] = useState(buildDescricaoCaso(p))
   const [escopo, setEscopo] = useState(ESCOPO_PADRAO)
   const [itensEscopo, setItensEscopo] = useState<string[]>(ITENS_ESCOPO_PADRAO)
@@ -149,7 +153,8 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
         polo_ativo: p.poloAtivo.toUpperCase() || '—',
         polo_passivo: p.poloPassivo.toUpperCase() || '—',
         evento_numero: eventoNum || 'XX',
-        pagina_decisao: '',
+        pagina_decisao: paginaDecisao || 'XX',
+        trecho_decisao: trechoDecisao,
         descricao_caso: descricao,
         escopo_trabalhos: escopo,
         itens_escopo: formatItensEscopo(itensEscopo),
@@ -323,16 +328,42 @@ export default function PropostaModal({ pericia: p, onClose, onSaved }: Proposta
             </div>
           </div>
 
-          {/* Evento */}
+          {/* Evento + Página da decisão */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2.5">
+              <label className="text-[13px] uppercase tracking-[0.1em] text-text/60 font-semibold">Nº do Evento</label>
+              <input
+                type="text"
+                value={eventoNum}
+                onChange={e => setEventoNum(e.target.value)}
+                className="w-full rounded-xl px-3 py-2.5 text-[13px] text-text/80 outline-none"
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+                placeholder="ex: 119"
+              />
+            </div>
+            <div className="flex flex-col gap-2.5">
+              <label className="text-[13px] uppercase tracking-[0.1em] text-text/60 font-semibold">Página da Decisão</label>
+              <input
+                type="text"
+                value={paginaDecisao}
+                onChange={e => setPaginaDecisao(e.target.value)}
+                className="w-full rounded-xl px-3 py-2.5 text-[13px] text-text/80 outline-none"
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+                placeholder="ex: 38"
+              />
+            </div>
+          </div>
+
+          {/* Trecho da decisão */}
           <div className="flex flex-col gap-2.5">
-            <label className="text-[13px] uppercase tracking-[0.1em] text-text/60 font-semibold">Nº do Evento</label>
-            <input
-              type="text"
-              value={eventoNum}
-              onChange={e => setEventoNum(e.target.value)}
-              className="w-full rounded-xl px-3 py-2.5 text-[13px] text-text/80 outline-none"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-              placeholder="ex: 119"
+            <label className="text-[13px] uppercase tracking-[0.1em] text-text/60 font-semibold">Trecho da Decisão (Seção 1)</label>
+            <textarea
+              value={trechoDecisao}
+              onChange={e => setTrechoDecisao(e.target.value)}
+              rows={4}
+              className="w-full rounded-xl px-3 py-2.5 text-[13px] text-text/75 outline-none resize-none leading-relaxed"
+              style={{ background: 'var(--comp-textarea)', border: '1px solid var(--border)' }}
+              placeholder="Cole aqui o trecho real da decisão que nomeou a perita neste processo"
             />
           </div>
 
