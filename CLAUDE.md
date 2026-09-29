@@ -19,13 +19,27 @@ O projeto está em **migração da planilha Google Sheets para Supabase**, com i
 - **Login + troca de senha testados de verdade** (não só no código) — funcionando, com olho de mostrar/ocultar senha
 - **Auditoria de segurança**: nenhum segredo vaza pro navegador nem pro repositório (testado com grep no bundle real e no site publicado)
 
+### ✅ Auditoria adversarial + correções (29/09/2026 madrugada)
+- **Auditoria linha a linha planilha × Supabase** (35 processos, 22 campos cada, checklist e somas de honorários): rodada 3 vezes (antes da correção, depois da correção, e uma checagem final) até fechar 100%.
+- **2 bugs reais encontrados na SUÍTE DE TESTES** (não no app) que corrompiam dado real da Gabi toda vez que `npm run test:db` rodava:
+  - `schema.test.js`: teste de "autenticado consegue escrever" gravava o literal fixo `"Goiânia"` sem reverter — corrompeu a cidade de 1 processo real. Corrigido pra fazer round-trip do valor que já estava lá.
+  - `integration.test.js`: teste de checklist apagava a marcação de "Proposta de Honorários" incondicionalmente ao final, mesmo quando ela já existia antes do teste — apagou essa marcação de 5 processos reais ao longo de várias execuções da suíte. Corrigido pra nunca mexer numa marcação que não foi o próprio teste que criou.
+  - Ambos os bugs foram a causa raiz de 100% das divergências de dado encontradas. Dados reconciliados a partir da planilha (fonte não editada desde 27/09), com backup datado em `backups/2026-09-29/` antes de qualquer escrita corretiva.
+- **Confirmado ao vivo**: durante a auditoria, 2 processos mudaram de fase no Supabase com `fase_changed_at` de minutos atrás — a Gabi já está usando o app novo em produção e a escrita está funcionando corretamente.
+- **63/63 testes passando** após as correções.
+- **Bug real de mobile corrigido e publicado**: a Gabi reportou que no celular a lista de perícias "parava" antes de mostrar tudo. Causa: paginação incremental do card mobile (`MOBILE_PAGE`) estava em 10, exigindo 3 toques em "Ver mais" pro caseload real dela (~34 ativos). Aumentado pra 50 e já deployado em produção.
+- **Redirecionamento de links antigos**: `controle-pericias-pericias-gabriella.vercel.app` (alias automático do Vercel) agora redireciona (308) pra `gabriellabento.com.br`, igual ao domínio `controle-pericias-delta.vercel.app`. Falta ainda publicar o redirect do GitHub Pages antigo (ver item 1 abaixo).
+- **Segurança confirmada ao vivo**: site inteiro com `noindex, nofollow` (Google nunca indexa), `/dashboard` sem sessão não vaza nenhum dado real no HTML, e leitura direta na API do Supabase sem login retorna "permission denied" (RLS bloqueando de verdade, testado na fonte, não só no código).
+
 ### O que falta
-1. **Enviar o branch `fase2-supabase` pro GitHub** — ainda bloqueado esperando autorização explícita do Robert (ação de push é sensível, pede confirmação sempre). App está rodando via deploy direto da CLI do Vercel, não via integração Git ainda.
-2. **Testar clicando de verdade a interface completa** (tabela, checklist, proposta) — o que foi testado até agora é auth + Calendar; a tabela/CRUD de perícias ainda não teve um clique real validado por alguém.
+1. **Enviar o branch `fase2-supabase` pro GitHub** — ainda bloqueado esperando autorização explícita do Robert (ação de push é sensível, pede confirmação sempre). App está rodando via deploy direto da CLI do Vercel, não via integração Git ainda. Isso também bloqueia publicar o redirect do GitHub Pages antigo (arquivos já prontos, só falta esse push).
+2. **Testar clicando de verdade a interface completa** (tabela, checklist, proposta) — o que foi testado até agora é auth + Calendar + auditoria de dados; um clique real ponta a ponta na tabela/CRUD ainda não foi feito por um humano.
 3. **Confirmar com a Gabi**: tabela ASPECON 2026 (itens 32/33 idênticos a 2025 — checar com a associação) e o modelo de proposta corrigido.
 4. **Reconectar o Google Calendar uma vez** agora que o app está publicado (ela conectou originalmente ainda em modo "Testando" — reconectar garante token de geração definitiva).
 5. **Backfill do Calendar**: os 35 processos migrados da planilha nunca passaram pela sincronização — a agenda dela só vai ter eventos dos processos criados/editados depois da conexão. Rodar sincronização única pra popular os prazos já existentes (pendente de confirmação do Robert, já que cria ~30-70 eventos reais).
 6. **Fase 4 (visual)**: design já aprovado (mockup "Controle de Perícias"), ainda não aplicado nos componentes reais.
+7. **Exportar para Excel**: botão pedido pelo Robert pra Gabi exportar as perícias (mesmo formato da planilha antiga), sob demanda. Ainda não construído.
+8. **Decisão sobre desligar a planilha/Apps Script de vez**: agora que a auditoria fechou 100% e o Supabase provou estar à frente em uso real, o risco de manter os dois em paralelo é baixo — mas a planilha ainda não deve ser apagada até o item 1 (push) e o item 2 (teste de clique real) estarem resolvidos.
 
 ### Inventário de recursos que NUNCA pode regredir
 Ver `INVENTARIO-DE-RECURSOS.md` — checklist de toda funcionalidade da versão antiga que tem que sobreviver na nova.
