@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { toast } from 'sonner'
-import { RefreshCw, LogOut, Settings, Scale, Sun, Moon, Eye, EyeOff, CalendarDays, CalendarCheck } from 'lucide-react'
+import { RefreshCw, LogOut, Settings, Scale, Sun, Moon, Eye, EyeOff, CalendarDays, CalendarCheck, FileSpreadsheet } from 'lucide-react'
 
 import { isAuthenticated, logout, changePassword } from '@/lib/auth'
 import { fetchPericias, fetchChecklist, subscribeToChanges } from '@/lib/sheets'
+import { exportPericiasToExcel } from '@/lib/exportExcel'
 import { authedFetch } from '@/lib/supabaseClient'
 import type { Pericia } from '@/lib/types'
 
@@ -42,6 +43,7 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [pinDialogOpen, setPinDialogOpen] = useState(false)
@@ -143,6 +145,18 @@ function DashboardContent() {
 
   const handleUpdate = useCallback(() => { load() }, [load])
 
+  const handleExportExcel = async () => {
+    setExporting(true)
+    try {
+      await exportPericiasToExcel(pericias)
+      toast.success('Planilha exportada')
+    } catch {
+      toast.error('Erro ao exportar — tente novamente')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const handleLogout = async () => {
     await logout()
     router.replace('/')
@@ -221,6 +235,14 @@ function DashboardContent() {
               title="Atualizar"
             >
               <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting || pericias.length === 0}
+              className="icon-btn w-8 h-8 sm:w-9 sm:h-9"
+              title="Exportar para Excel"
+            >
+              <FileSpreadsheet size={15} className={exporting ? 'animate-pulse' : ''} />
             </button>
             <button
               onClick={() => setPinDialogOpen(true)}
