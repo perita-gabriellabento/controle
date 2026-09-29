@@ -4,9 +4,19 @@
 >
 > **Regra fixa pra reconstrução (Fase 2 em diante): nenhum item aqui pode desaparecer. Pode melhorar, pode mudar o mecanismo por dentro (ex: trocar polling por Realtime), nunca remover a capacidade que a Gabi já tem hoje.**
 
-## Status (28/09/2026)
+## Status (29/09/2026)
 
-Todo o código abaixo foi reescrito pra Supabase no branch `fase2-supabase` (ver `CLAUDE.md`) preservando essas funcionalidades **na leitura do código** — isto é, revisei cada componente linha a linha durante a migração e nenhuma capacidade foi removida do JSX/lógica. **O que ainda NÃO aconteceu: teste clicando de verdade num navegador.** Não marcar nenhum item abaixo como "✅ confirmado" até alguém (Robert ou Gabi) usar a tela de verdade — só então virar checkbox marcado com data.
+Todo o código abaixo foi reescrito pra Supabase no branch `fase2-supabase` (ver `CLAUDE.md`) preservando essas funcionalidades **na leitura do código** — isto é, revisei cada componente linha a linha durante a migração e nenhuma capacidade foi removida do JSX/lógica.
+
+**Confirmado por uso real em produção (não só leitura de código) até aqui:** login (com erro de sessão investigado e corrigido de verdade), Google Calendar (eventos reais criados/atualizados na agenda da Gabi, incluindo enquanto ela usava o app durante uma auditoria), checklist (banco real, 68 testes automatizados), exportar Excel (arquivo real gerado e lido de volta por ferramenta independente), anexo de arquivo (upload/download real testado com RLS).
+
+**O que ainda NÃO aconteceu: alguém clicando de verdade em cada botão/interação num navegador.** Os itens abaixo continuam `[ ]` por disciplina — não marco como confirmado só porque o código compila ou porque testei via API/script. Só viram `[x]` quando o Robert ou a Gabi realmente usar a tela e confirmar.
+
+### Recursos novos desde a migração (não existiam na planilha antiga)
+- **Anexar arquivo por processo** — PDF/imagem/Word até 10MB, painel expandido de cada perícia
+- **Exportar para Excel** — botão no topo do dashboard, formatação real (cabeçalho, moeda, data, zebra)
+- **Correção manual de "desde quando está nesta fase"** — resolve prazo de Calendar pros processos legados da migração
+- **Sincronização automática do Calendar** — dispara ao editar início/entrega/fase, criar, arquivar ou excluir
 
 ## Autenticação / sessão
 - [ ] Acesso protegido por credencial rápida, sessão persistente sem precisar logar toda hora
