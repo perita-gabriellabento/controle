@@ -13,9 +13,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-        <link rel="icon" type="image/x-icon" href="/controle/favicon.ico" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/controle/favicon.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/controle/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         {/* Evita flash de tema: aplica tema antes do primeiro paint */}
         <script
           dangerouslySetInnerHTML={{

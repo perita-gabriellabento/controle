@@ -38,6 +38,7 @@ export interface Pericia {
   arquivado?: boolean
   // novos campos
   checklistDone?: string        // JSON array: "[1,3,5]"
+  faseChangedAt?: string        // quando a fase atual começou — base do cálculo de prazo
   propostaStatus?: PropostaStatus
   propostaValor?: string
   propostaCategoria?: string

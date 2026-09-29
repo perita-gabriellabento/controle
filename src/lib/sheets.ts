@@ -101,6 +101,7 @@ function dbToPericia(row: any, doneMap: Map<string, string[]>): Pericia {
     propostaStatus: row.proposta_status || '',
     propostaValor: row.proposta_valor != null ? String(row.proposta_valor) : '',
     propostaCategoria: row.proposta_categoria != null ? String(row.proposta_categoria) : '',
+    faseChangedAt: row.fase_changed_at || '',
   }
 }
 
@@ -205,6 +206,18 @@ export async function appendPericia(fields: Omit<Pericia, 'id' | 'createdAt'>): 
   const { data, error } = await supabase.from('pericias').insert(payload).select('id').single()
   if (error) return { ok: false, error: error.message }
   return { ok: true, id: data.id }
+}
+
+// Correção manual de "desde quando está nesta fase" — usada só nos processos legados cuja
+// fase_changed_at é um artefato da migração (não a data real de entrada na fase), pra permitir
+// calcular o prazo com segurança sem criar alarme falso. dataISO = "YYYY-MM-DD" (meio-dia em
+// Brasília = 15:00 UTC, fuso fixo -3, sem horário de verão — evita qualquer ambiguidade de fuso).
+export async function correctFaseChangedAt(id: string, dataISO: string): Promise<ApiResponse> {
+  const timestamp = `${dataISO}T15:00:00.000Z`
+  const { error } = await withRetry(() => supabase.from('pericias').update({ fase_changed_at: timestamp }).eq('id', id) as any)
+  if (error) return { ok: false, error: error.message }
+  invalidateCache()
+  return { ok: true }
 }
 
 export async function archivePericia(id: string): Promise<ApiResponse> {

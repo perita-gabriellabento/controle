@@ -2,11 +2,12 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin, KeyRound, Copy, X, Paperclip, Download, Upload } from 'lucide-react'
+import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin, KeyRound, Copy, X, Paperclip, Download, Upload, CalendarClock, Pencil } from 'lucide-react'
 import { Pericia, ChecklistItem, ASPECON_TABLE } from '@/lib/types'
-import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, deleteCustomTask, getChecklistCacheSync } from '@/lib/sheets'
+import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, deleteCustomTask, getChecklistCacheSync, correctFaseChangedAt } from '@/lib/sheets'
 import { authedFetch } from '@/lib/supabaseClient'
 import { formatCurrency, formatDate, parseCurrency, toTitleCase } from '@/lib/utils'
+import { utcTimestampToBrazilDate } from '@/lib/businessDays'
 import { fetchAnexos, uploadAnexo, deleteAnexo, getAnexoUrl, formatBytes, EXTENSOES_PERMITIDAS, type Anexo } from '@/lib/anexos'
 import EditableCell from '@/components/EditableCell'
 import FaseBadge from '@/components/FaseBadge'
@@ -164,6 +165,74 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
         {done}/{total}
       </text>
     </svg>
+  )
+}
+
+// Correção manual de "desde quando está nesta fase" — só existe pra corrigir os processos
+// legados cuja fase_changed_at é artefato da migração (não a data real). Depois de salvar,
+// dispara sincronização do Calendar pra criar/corrigir o evento de prazo já com a data certa.
+function FaseChangedCorrector({ pericia: p, onUpdate }: { pericia: Pericia; onUpdate: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const currentDateISO = p.faseChangedAt ? utcTimestampToBrazilDate(p.faseChangedAt) : ''
+  const [value, setValue] = useState(currentDateISO)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    if (!value) return
+    setSaving(true)
+    try {
+      const res = await correctFaseChangedAt(p.id, value)
+      if (!res.ok) { toast.error('Erro ao corrigir data', { description: res.error }); return }
+      triggerCalendarSync(p.id)
+      onUpdate()
+      setEditing(false)
+      toast.success('Data da fase corrigida', { description: `Nesta fase desde ${formatDate(value)} — prazo recalculado.` })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-5 py-2.5 text-[11.5px] font-montserrat" style={{ borderBottom: '1px solid var(--comp-row-border)', color: 'var(--muted)' }}>
+      <CalendarClock size={12} className="flex-shrink-0" />
+      {editing ? (
+        <>
+          <span>Nesta fase (&quot;{p.fase}&quot;) desde:</span>
+          <input
+            type="date"
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            className="rounded-md px-2 py-1 text-[12px] text-text outline-none"
+            style={{ background: 'var(--comp-cell-input)', border: '1px solid var(--border)' }}
+          />
+          <button
+            onClick={handleSave}
+            disabled={saving || !value}
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-md disabled:opacity-40"
+            style={{ background: 'rgba(212,175,55,0.18)', color: 'var(--gold)' }}
+          >
+            {saving ? 'Salvando…' : 'Salvar'}
+          </button>
+          <button onClick={() => { setEditing(false); setValue(currentDateISO) }} className="text-[11px] text-text/40 px-2 py-1">
+            Cancelar
+          </button>
+        </>
+      ) : (
+        <>
+          <span>
+            Nesta fase (&quot;{p.fase}&quot;) desde <b className="text-text/70">{currentDateISO ? formatDate(currentDateISO) : '—'}</b>
+          </span>
+          <button
+            onClick={() => setEditing(true)}
+            className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md transition-colors"
+            style={{ color: 'var(--gold)', opacity: 0.7 }}
+            title="Corrigir data — use se essa data vier da migração e não da realidade"
+          >
+            <Pencil size={10} /> corrigir
+          </button>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -347,6 +416,7 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
         borderTop: '1px solid var(--comp-row-border)',
       }}
     >
+    <FaseChangedCorrector pericia={p} onUpdate={onUpdate} />
     <div
       className="grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-0"
     >
