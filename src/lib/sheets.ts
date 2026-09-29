@@ -110,9 +110,13 @@ function dbToPericia(row: any, doneMap: Map<string, string[]>): Pericia {
 export async function fetchPericias(force = false): Promise<Pericia[]> {
   if (!force && _cache && Date.now() - _cacheTs < CACHE_TTL) return _cache
 
+  // Retry aqui é importante: logo após login o token acabou de ser emitido, e uma
+  // pequena diferença de relógio entre servidores (ou no próprio dispositivo) pode
+  // rejeitar a primeira tentativa com "JWT issued at future" — passageiro, corrige
+  // sozinho em menos de 1s. Sem retry, isso virava erro na tela pra usuária.
   const [{ data: rows, error }, { data: doneRows, error: doneErr }] = await Promise.all([
-    supabase.from('pericias').select('*'),
-    supabase.from('pericia_checklist_done').select('pericia_id, checklist_item_id'),
+    withRetry<any[]>(() => supabase.from('pericias').select('*') as any),
+    withRetry<any[]>(() => supabase.from('pericia_checklist_done').select('pericia_id, checklist_item_id') as any),
   ])
   if (error) throw new Error(`Erro ao buscar dados: ${error.message}`)
   if (doneErr) throw new Error(`Erro ao buscar checklist: ${doneErr.message}`)
@@ -131,7 +135,7 @@ export async function fetchPericias(force = false): Promise<Pericia[]> {
 
 export async function fetchChecklist(force = false): Promise<ChecklistItem[]> {
   if (!force && _checklistCache && Date.now() - _checklistCacheTs < 300_000) return _checklistCache
-  const { data, error } = await supabase.from('checklist_items').select('id, descricao, pericia_id')
+  const { data, error } = await withRetry<any[]>(() => supabase.from('checklist_items').select('id, descricao, pericia_id') as any)
   if (error) return []
   _checklistCache = (data || []).map(i => ({ id: i.id, descricao: i.descricao, pericia_row: i.pericia_id }))
   _checklistCacheTs = Date.now()
