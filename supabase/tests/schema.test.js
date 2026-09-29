@@ -144,6 +144,47 @@ async function testCascadeAndIsolation() {
   await sbAdmin.from('pericias').delete().eq('id', p2.id);
 }
 
+async function testAnexos() {
+  section('D2) Anexos — RLS do storage, upload/download real, cascade delete')
+  const BUCKET = 'anexos-pericias'
+  const pdf = () => new Blob(['%PDF-1.4 fake content'], { type: 'application/pdf' })
+
+  const { error: anonErr } = await sbAnon.storage.from(BUCKET).upload('teste-suite-anon.pdf', pdf())
+  if (anonErr) ok('anônimo bloqueado de subir arquivo (RLS do storage)')
+  else { bad('anônimo CONSEGUIU subir arquivo sem login — falha grave'); await sbAdmin.storage.from(BUCKET).remove(['teste-suite-anon.pdf']) }
+
+  const { error: signInErr } = await sbAnon.auth.signInWithPassword({ email: GABI_EMAIL, password: GABI_PW })
+  if (signInErr) { bad('login da Gabi falhou (anexos): ' + signInErr.message); return }
+
+  const { data: p } = await sbAdmin.from('pericias').insert({ polo_ativo: 'Teste Anexo', polo_passivo: 'x', numero_processo: 'TEST-ANEXO1' }).select('id').single()
+  const path = `${p.id}/teste-suite.pdf`
+
+  const { error: upErr } = await sbAnon.storage.from(BUCKET).upload(path, pdf())
+  if (!upErr) ok('autenticada consegue subir arquivo')
+  else bad('upload autenticado falhou: ' + upErr.message)
+
+  const { data: anexoRow, error: insErr } = await sbAnon.from('pericia_anexos').insert({
+    pericia_id: p.id, nome_arquivo: 'teste-suite.pdf', storage_path: path, tamanho_bytes: 21, tipo_mime: 'application/pdf',
+  }).select('id').single()
+  if (!insErr) ok('metadado do anexo salvo')
+  else bad('salvar metadado falhou: ' + insErr.message)
+
+  const { data: dl, error: dlErr } = await sbAnon.storage.from(BUCKET).download(path)
+  if (!dlErr && dl.size > 0) ok('autenticada consegue baixar o arquivo de volta')
+  else bad('download falhou: ' + (dlErr?.message || 'tamanho zero'))
+
+  // Apaga a perícia (não o anexo) — o storage_path fica órfão no bucket (Storage não faz
+  // cascade automático com uma tabela comum), mas o METADADO tem que cair em cascata.
+  await sbAdmin.from('pericias').delete().eq('id', p.id)
+  const { data: orphanMeta } = await sbAdmin.from('pericia_anexos').select('id').eq('id', anexoRow?.id || '00000000-0000-0000-0000-000000000000')
+  if (!orphanMeta || orphanMeta.length === 0) ok('metadado do anexo apagado em cascata com a perícia')
+  else bad('metadado do anexo ficou órfão após apagar a perícia')
+
+  // limpeza do arquivo físico órfão no bucket
+  await sbAdmin.storage.from(BUCKET).remove([path])
+  await sbAnon.auth.signOut()
+}
+
 async function testFaseChangedAtTrigger() {
   section('E) fase_changed_at só avança quando a fase muda de verdade');
   const { data: p } = await sbAdmin.from('pericias').insert({ polo_ativo:'Teste Fase', polo_passivo:'x', numero_processo:'TEST-E1', fase: 'Em produção' }).select('id, fase_changed_at').single();
@@ -224,6 +265,7 @@ async function main() {
   await testAnonBlocked();
   await testCheckConstraints();
   await testCascadeAndIsolation();
+  await testAnexos();
   await testFaseChangedAtTrigger();
   await testDefaults();
   await testSingleton();

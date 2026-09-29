@@ -206,3 +206,34 @@ grant select, insert, update, delete on pericias, checklist_items, pericia_check
 -- garante que tabelas criadas no futuro (via este mesmo schema.sql rodado pelo usuário postgres) já nasçam com o grant certo
 alter default privileges in schema public grant all on tables to service_role;
 alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+
+-- ── pericia_anexos ───────────────────────────────────────────
+-- Arquivos anexados por processo (decisões, laudos, documentos escaneados).
+-- Arquivo em si fica no Storage bucket "anexos-pericias" (privado); esta
+-- tabela só guarda os metadados. Bucket limitado a 10MB/arquivo e a
+-- pdf/imagem/word — plano gratuito do Supabase tem só 1GB de storage total,
+-- bem menor que o de banco de dados, então cuidado extra aqui.
+create table if not exists pericia_anexos (
+  id            uuid primary key default gen_random_uuid(),
+  created_at    timestamptz not null default now(),
+  pericia_id    uuid not null references pericias(id) on delete cascade,
+  nome_arquivo  text not null,
+  storage_path  text not null unique,
+  tamanho_bytes bigint not null check (tamanho_bytes > 0),
+  tipo_mime     text not null
+);
+
+create index if not exists idx_pericia_anexos_pericia_id on pericia_anexos(pericia_id);
+
+alter table pericia_anexos enable row level security;
+
+create policy "authenticated_full_access" on pericia_anexos
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+grant select, insert, update, delete on pericia_anexos to authenticated;
+
+-- storage.objects: mesmo padrão (autenticada tem acesso total, anônimo bloqueado),
+-- restrito ao bucket anexos-pericias especificamente.
+create policy "authenticated_full_access_anexos_pericias" on storage.objects
+  for all using (bucket_id = 'anexos-pericias' and auth.role() = 'authenticated')
+  with check (bucket_id = 'anexos-pericias' and auth.role() = 'authenticated');

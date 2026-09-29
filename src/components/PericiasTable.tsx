@@ -2,11 +2,12 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin, KeyRound, Copy, X } from 'lucide-react'
+import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin, KeyRound, Copy, X, Paperclip, Download, Upload } from 'lucide-react'
 import { Pericia, ChecklistItem, ASPECON_TABLE } from '@/lib/types'
 import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, deleteCustomTask, getChecklistCacheSync } from '@/lib/sheets'
 import { authedFetch } from '@/lib/supabaseClient'
 import { formatCurrency, formatDate, parseCurrency, toTitleCase } from '@/lib/utils'
+import { fetchAnexos, uploadAnexo, deleteAnexo, getAnexoUrl, formatBytes, EXTENSOES_PERMITIDAS, type Anexo } from '@/lib/anexos'
 import EditableCell from '@/components/EditableCell'
 import FaseBadge from '@/components/FaseBadge'
 import PropostaModal from '@/components/PropostaModal'
@@ -341,11 +342,13 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
 
   return (
     <div
-      className="grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-0"
       style={{
         background: 'linear-gradient(135deg, var(--comp-expand-from) 0%, var(--comp-expand-to) 100%)',
         borderTop: '1px solid var(--comp-row-border)',
       }}
+    >
+    <div
+      className="grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-0"
     >
       {/* ── Checklist ── */}
       <div className="p-5 panel-divider-b panel-divider-r">
@@ -484,6 +487,103 @@ function ExpandedPanel({ pericia: p, checklistItems, onUpdate, onOpenProposta, o
           {p.propostaStatus && p.propostaStatus !== 'Pendente' ? 'Ver / Editar Proposta' : 'Gerar Proposta'}
         </button>
       </div>
+    </div>
+
+    <AnexosSection periciaId={p.id} />
+    </div>
+  )
+}
+
+// ── Anexos ──────────────────────────────────────────────────
+function AnexosSection({ periciaId }: { periciaId: string }) {
+  const [anexos, setAnexos] = useState<Anexo[] | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    fetchAnexos(periciaId).then(setAnexos).catch(() => setAnexos([]))
+  }, [periciaId])
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    try {
+      const res = await uploadAnexo(periciaId, file)
+      if (!res.ok) { toast.error('Erro ao anexar', { description: res.error }); return }
+      setAnexos(await fetchAnexos(periciaId))
+      toast.success('Arquivo anexado', { description: file.name })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleDownload(anexo: Anexo) {
+    const url = await getAnexoUrl(anexo.storagePath)
+    if (!url) { toast.error('Erro ao abrir arquivo'); return }
+    window.open(url, '_blank')
+  }
+
+  async function handleDelete(anexo: Anexo) {
+    if (!confirm(`Remover "${anexo.nomeArquivo}"?`)) return
+    setDeletingId(anexo.id)
+    try {
+      const res = await deleteAnexo(anexo)
+      if (!res.ok) { toast.error('Erro ao remover', { description: res.error }); return }
+      setAnexos(prev => (prev || []).filter(a => a.id !== anexo.id))
+      toast.success('Arquivo removido')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <div className="p-5" style={{ borderTop: '1px solid var(--comp-row-border)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text/55 font-montserrat flex items-center gap-2">
+          <Paperclip size={12} />
+          Anexos {anexos && anexos.length > 0 ? `(${anexos.length})` : ''}
+        </p>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1.5 text-[12px] font-montserrat transition-all duration-150 px-2.5 py-1.5 rounded-lg disabled:opacity-40"
+          style={{ color: 'var(--gold)', opacity: uploading ? 0.4 : 0.75 }}
+        >
+          {uploading ? <Spin size={11} className="animate-spin" /> : <Upload size={11} />}
+          {uploading ? 'Enviando…' : 'Anexar arquivo'}
+        </button>
+        <input ref={fileInputRef} type="file" accept={EXTENSOES_PERMITIDAS} onChange={handleFileSelected} className="hidden" />
+      </div>
+
+      {anexos === null ? (
+        <p className="text-[12px] text-text/40 font-montserrat italic">Carregando…</p>
+      ) : anexos.length === 0 ? (
+        <p className="text-[12px] text-text/40 font-montserrat italic">Nenhum arquivo anexado. PDF, imagem ou Word, até 10MB.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {anexos.map(a => (
+            <div key={a.id} className="flex items-center gap-2.5 py-1.5 px-2.5 rounded-lg group" style={{ background: 'var(--comp-cell-hover)' }}>
+              <FileText size={13} className="flex-shrink-0 text-text/40" />
+              <span className="text-[13px] font-montserrat text-text/80 truncate flex-1 min-w-0">{a.nomeArquivo}</span>
+              <span className="text-[11px] font-montserrat text-text/35 flex-shrink-0">{formatBytes(a.tamanhoBytes)}</span>
+              <button onClick={() => handleDownload(a)} className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center text-text/40 hover:text-gold/80 transition-colors" title="Baixar">
+                <Download size={12} />
+              </button>
+              <button
+                onClick={() => handleDelete(a)}
+                disabled={deletingId === a.id}
+                className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center text-text/30 hover:text-red-400/80 transition-colors disabled:opacity-40"
+                title="Remover"
+              >
+                {deletingId === a.id ? <Spin size={11} className="animate-spin" /> : <Trash2 size={11} />}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
