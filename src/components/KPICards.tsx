@@ -122,59 +122,34 @@ export default function KPICards({ pericias, activeFilter, onCardClick }: KPICar
           <button
             key={card.id || 'total'}
             onClick={() => onCardClick(card.id)}
-            className="kpi-card rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden text-left w-full transition-all duration-200"
+            className="kpi-card rounded-lg pl-4 pr-4 py-4 flex flex-col gap-2.5 relative overflow-hidden text-left w-full transition-all duration-200"
             style={{
-              outline: isActive ? `1.5px solid ${card.accent}` : undefined,
-              boxShadow: isActive ? `0 0 24px ${card.accent}28, 0 6px 28px rgba(0,0,0,0.3)` : undefined,
-              opacity: isDimmed ? 0.45 : 1,
+              opacity: isDimmed ? 0.4 : 1,
               transform: isActive ? 'translateY(-2px)' : undefined,
+              boxShadow: isActive ? `0 8px 24px -8px ${card.accent}40` : undefined,
             }}
             title={card.id ? `Filtrar por: ${card.label}` : 'Mostrar todos'}
           >
-            {/* Barra colorida sólida — identidade de cada card */}
-            <div
-              className="absolute top-0 left-0 right-0 transition-all duration-200"
-              style={{
-                height: isActive ? '4px' : '3px',
-                background: card.accent,
-                opacity: isActive ? 1 : 0.8,
-              }}
-            />
+            {/* Barra de acento — div decorativa (não `border`), pra sobreviver ao "border: none !important" do modo claro */}
+            <div className="absolute left-0 top-0 bottom-0" style={{ width: '3px', background: card.accent }} />
 
-            {/* Active indicator dot */}
-            {isActive && (
-              <div
-                className="absolute top-3 right-3 w-2 h-2 rounded-full"
-                style={{ background: card.accent, boxShadow: `0 0 8px ${card.accent}` }}
-              />
-            )}
-
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-[12px] font-semibold uppercase tracking-widest text-text/60 font-montserrat leading-tight">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-text/55 font-montserrat leading-tight">
                 {card.label}
               </p>
-              <div
-                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200"
-                style={{
-                  background: isActive ? `${card.accent}22` : card.glow,
-                  border: `1px solid ${card.accent}${isActive ? '44' : '22'}`,
-                }}
-              >
-                <Icon size={17} style={{ color: card.accent }} strokeWidth={2} />
-              </div>
+              <Icon size={13} style={{ color: card.accent, opacity: isActive ? 1 : 0.7 }} strokeWidth={2} />
             </div>
 
-            <div>
-              <p
-                className={`text-[22px] sm:text-[28px] font-bold font-montserrat leading-none tracking-tight${card.private ? ' pv' : ''}`}
-                style={{ color: card.accent }}
-              >
-                {card.value}
-              </p>
-              <p className="text-[11px] text-text/50 mt-2 font-montserrat uppercase tracking-wider">
-                {card.sub}
-              </p>
-            </div>
+            <p
+              className={`font-cinzel text-[24px] sm:text-[27px] font-semibold leading-none tabular-nums${card.private ? ' pv' : ''}`}
+              style={{ color: card.accent }}
+            >
+              {card.value}
+            </p>
+
+            <p className="text-[10.5px] text-text/40 font-montserrat">
+              {card.sub}
+            </p>
           </button>
         )
       })}

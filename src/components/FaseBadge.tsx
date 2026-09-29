@@ -24,17 +24,18 @@ export default function FaseBadge({ fase, size = 'default' }: FaseBadgeProps) {
 
   if (!colors) return <span className="text-text/60 text-sm">{label}</span>
 
-  const padding = size === 'sm' ? 'px-2.5 py-1 text-[12px]' : 'px-3 py-1 text-[13px]'
+  const padding = size === 'sm' ? 'pl-2 pr-2.5 py-1 text-[11.5px]' : 'pl-2.5 pr-3 py-1.5 text-[12.5px]'
 
   return (
     <span
-      className={`inline-block rounded font-medium font-montserrat whitespace-nowrap ${padding}`}
+      className={`inline-flex items-center gap-1.5 rounded-full font-semibold font-montserrat whitespace-nowrap tracking-wide ${padding}`}
       style={{
         background: colors.bg,
         color: colors.text,
         border: `1px solid ${colors.border}`,
       }}
     >
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: colors.text }} />
       {label}
     </span>
   )
