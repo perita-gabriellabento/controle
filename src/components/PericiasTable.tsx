@@ -780,12 +780,17 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                 {COLS.map((h, hi) => {
                   const isFrozen = hi < 3 // qtd, poloAtivo, poloPassivo
                   const isLast = hi === 2
+                  // Mesma largura EXATA do <td> do corpo (linhas mais abaixo) — cabeçalho e
+                  // corpo têm que casar em px, senão a coluna seguinte (fixada num left
+                  // absoluto) sobrepõe/corta o cabeçalho durante o scroll horizontal.
+                  const frozenWidth = hi === 0 ? 40 : 148
                   return (
                   <th
                     key={h.key}
                     className={`${isFrozen ? `sticky-col${isLast ? ' sticky-col-last' : ''}` : ''} ${h.width} px-3 py-4 select-none whitespace-nowrap cursor-pointer group ${h.align === 'right' ? 'text-right' : h.align === 'center' ? 'text-center' : 'text-left'}`}
                     style={isFrozen ? {
-                      minWidth: isLast || hi === 1 ? 148 : undefined,
+                      width: frozenWidth,
+                      minWidth: frozenWidth,
                       left: hi === 0 ? 180 : hi === 1 ? 220 : 368,
                     } : undefined}
                     onClick={() => toggleSort(h.key)}

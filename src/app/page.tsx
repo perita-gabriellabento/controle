@@ -41,7 +41,7 @@ export default function LoginPage() {
       if (!res.ok) {
         setShake(true)
         setTimeout(() => setShake(false), 600)
-        toast.error('Não foi possível entrar', { description: 'Verifique e-mail e senha e tente novamente.' })
+        toast.error('Não foi possível entrar', { description: res.error || 'Verifique e-mail e senha e tente novamente.' })
         return
       }
       router.replace('/dashboard')
