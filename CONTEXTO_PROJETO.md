@@ -1,3 +1,5 @@
+> ⚠️ **DOCUMENTO HISTÓRICO (maio/2026) — descreve a versão antiga (Google Sheets + GitHub Pages).** O estado atual (Supabase + Vercel + Calendar, em `gabriellabento.com.br`) está em `CLAUDE.md`. Use este arquivo só pra entender regras de negócio originais.
+
 # Controle de Perícias GB — Contexto do Projeto
 
 ## Visão Geral

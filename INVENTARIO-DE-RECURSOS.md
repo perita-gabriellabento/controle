@@ -4,11 +4,11 @@
 >
 > **Regra fixa pra reconstrução (Fase 2 em diante): nenhum item aqui pode desaparecer. Pode melhorar, pode mudar o mecanismo por dentro (ex: trocar polling por Realtime), nunca remover a capacidade que a Gabi já tem hoje.**
 
-## Status (29/09/2026)
+## Status (atualizado 02/10/2026)
 
-Todo o código abaixo foi reescrito pra Supabase no branch `fase2-supabase` (ver `CLAUDE.md`) preservando essas funcionalidades **na leitura do código** — isto é, revisei cada componente linha a linha durante a migração e nenhuma capacidade foi removida do JSX/lógica.
+Todo o código abaixo foi reescrito pra Supabase e **já está no `main` e em produção** (`gabriellabento.com.br`, ver `CLAUDE.md`) preservando essas funcionalidades **na leitura do código** — isto é, revisei cada componente linha a linha durante a migração e nenhuma capacidade foi removida do JSX/lógica.
 
-**Confirmado por uso real em produção (não só leitura de código) até aqui:** login (com erro de sessão investigado e corrigido de verdade), Google Calendar (eventos reais criados/atualizados na agenda da Gabi, incluindo enquanto ela usava o app durante uma auditoria), checklist (banco real, 68 testes automatizados), exportar Excel (arquivo real gerado e lido de volta por ferramenta independente), anexo de arquivo (upload/download real testado com RLS).
+**Confirmado por uso real em produção (não só leitura de código) até aqui:** proposta de honorários finalizada e no ar (confirmado pelo Robert em 02/10 — itens da seção Proposta abaixo seguem `[ ]` até conferência tela a tela), login (com erro de sessão investigado e corrigido de verdade), Google Calendar (eventos reais criados/atualizados na agenda da Gabi, incluindo enquanto ela usava o app durante uma auditoria), checklist (banco real, 68 testes automatizados), exportar Excel (arquivo real gerado e lido de volta por ferramenta independente), anexo de arquivo (upload/download real testado com RLS).
 
 **O que ainda NÃO aconteceu: alguém clicando de verdade em cada botão/interação num navegador.** Os itens abaixo continuam `[ ]` por disciplina — não marco como confirmado só porque o código compila ou porque testei via API/script. Só viram `[x]` quando o Robert ou a Gabi realmente usar a tela e confirmar.
 

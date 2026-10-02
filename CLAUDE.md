@@ -1,53 +1,32 @@
 # Controle de Perícias — Gabriella Bento
 
-## ⚠️ Status atual (28/09/2026) — leia isto primeiro
+## ✅ Status atual (02/10/2026) — leia isto primeiro
 
-O projeto está em **migração da planilha Google Sheets para Supabase**, com integração nova de Google Calendar. Tudo isso vive no branch **`fase2-supabase`** (commit `2dbf8c8`), **a `main` continua intocada e é o que está publicado hoje** em produção (ainda na planilha/PIN antigos). Nada do que está descrito abaixo como "novo" está no ar ainda.
+**O app novo (Supabase + Calendar) está no ar e é a versão oficial:** https://gabriellabento.com.br (Vercel, projeto `controle-pericias`). A Gabi já usa no dia a dia. O que está no ar está correto (confirmado pelo Robert em 02/10).
 
-### O que já está pronto e testado (branch `fase2-supabase`)
-- **Banco Supabase criado e migrado**: todos os 35 processos reais migrados da planilha, com auditoria numérica e de data confirmando zero divergência
-- **Schema relacional completo**: `supabase/schema.sql` — tabelas, RLS, triggers, grants
-- **App reescrito** pra falar com o Supabase em vez do Google Sheets (autenticação real por e-mail/senha, tempo real em vez de polling, `row`→`id`)
-- **Google Calendar**: OAuth com proteção CSRF, autenticação obrigatória em toda rota, cálculo de prazo por fase (dias úteis + feriados + recesso forense)
-- **63 testes automatizados** rodando contra o banco real e o servidor real (`npm run test:db`)
-- **Next.js atualizado** 14.2.29 → 14.2.35 (corrige vulnerabilidade de segurança)
+### Onde está cada coisa
+- **Código:** GitHub `perita-gabriellabento/controle`. Em 02/10 conferido direto no remoto: `main` = `fase2-supabase` = commit `0a7c45a` (merge feito em 29/09, nada divergente). O `git status` local pode mostrar "ahead 19" — é só a referência `origin/main` local velha, não diferença real.
+- **Deploy:** CLI do Vercel (`npx vercel`, token no Keychain — ver seção Deploy). **Não** é via integração Git — push no GitHub não publica nada sozinho.
+- **Dados:** Supabase (35 processos migrados e auditados 100% contra a planilha).
+- **Planilha Google + `pericias-proxy.gs` (Apps Script):** o app **não usa mais**. **Decisão do Robert (02/10): deixar ligada e NÃO alterar nada — fica só como base histórica.** Não apagar, não editar, não desligar.
+- **GitHub Pages antigo** (`perita-gabriellabento.github.io/controle/`, branch `gh-pages` `a9f7a62`): continua no ar, ainda servindo o app antigo da planilha (HTTP 200 conferido em 02/10). O redirect pro domínio novo ainda **não foi publicado** — ver pendências.
 
-### ✅ Marcos concluídos (29/09/2026)
-- **App publicado no Vercel**: https://gabriellabento.com.br (domínio próprio, HTTPS válido, DNS na Locaweb)
-- **Google Calendar testado ponta a ponta em produção**: conexão OAuth, criação/edição/remoção de evento real confirmadas
-- **App OAuth do Google publicado ("In production")** — não expira mais em 7 dias
-- **Login + troca de senha testados de verdade** (não só no código) — funcionando, com olho de mostrar/ocultar senha
-- **Auditoria de segurança**: nenhum segredo vaza pro navegador nem pro repositório (testado com grep no bundle real e no site publicado)
+### Decisões fechadas (não reabrir)
+- **Proposta de honorários:** finalizada. Campo "Trecho da Decisão" 100% livre (commit `cdf22f3`); modelo `.docx` corrigido e no ar.
+- **Tabela ASPECON-GO 2026** (Resolução 001/2026) aplicada em `src/lib/types.ts`. A associação aboliu a coluna "valor médio" (`valorMedio: 0`, UI já trata). Itens 32/33 iguais a 2025 **de verdade** — a própria ASPECON não reajustou, confirmado no PDF oficial. Não é bug.
+- **Senha da Gabi:** definida, ficou como está, **vai permanecer** (não trocar nem pedir troca).
+- **Google Calendar:** atualizado (confirmado pelo Robert em 02/10). A Gabi **está ciente** de que precisa informar "desde quando está nesta fase" nos processos legados (campo de correção manual no app) — enquanto ela não preenche, os ~20 processos legados ficam sem evento de "prazo da fase" **de propósito** (não é esquecimento nem bug). Cria evento só pra quem tem `fase_changed_at` confiável.
+- **Fase 4 (visual):** aplicada (badges pill+ponto, KPIs, favicon real, colunas congeladas corrigidas, contraste no modo claro).
+- **Exportar Excel, anexos por processo, Realtime, retry de auth (`withRetry`):** prontos e em produção.
 
-### ✅ Auditoria adversarial + correções (29/09/2026 madrugada)
-- **Auditoria linha a linha planilha × Supabase** (35 processos, 22 campos cada, checklist e somas de honorários): rodada 3 vezes (antes da correção, depois da correção, e uma checagem final) até fechar 100%.
-- **2 bugs reais encontrados na SUÍTE DE TESTES** (não no app) que corrompiam dado real da Gabi toda vez que `npm run test:db` rodava:
-  - `schema.test.js`: teste de "autenticado consegue escrever" gravava o literal fixo `"Goiânia"` sem reverter — corrompeu a cidade de 1 processo real. Corrigido pra fazer round-trip do valor que já estava lá.
-  - `integration.test.js`: teste de checklist apagava a marcação de "Proposta de Honorários" incondicionalmente ao final, mesmo quando ela já existia antes do teste — apagou essa marcação de 5 processos reais ao longo de várias execuções da suíte. Corrigido pra nunca mexer numa marcação que não foi o próprio teste que criou.
-  - Ambos os bugs foram a causa raiz de 100% das divergências de dado encontradas. Dados reconciliados a partir da planilha (fonte não editada desde 27/09), com backup datado em `backups/2026-09-29/` antes de qualquer escrita corretiva.
-- **Confirmado ao vivo**: durante a auditoria, 2 processos mudaram de fase no Supabase com `fase_changed_at` de minutos atrás — a Gabi já está usando o app novo em produção e a escrita está funcionando corretamente.
-- **63/63 testes passando** após as correções.
-- **Bug real de mobile corrigido e publicado**: a Gabi reportou que no celular a lista de perícias "parava" antes de mostrar tudo. Causa: paginação incremental do card mobile (`MOBILE_PAGE`) estava em 10, exigindo 3 toques em "Ver mais" pro caseload real dela (~34 ativos). Aumentado pra 50 e já deployado em produção.
-- **Redirecionamento de links antigos**: `controle-pericias-pericias-gabriella.vercel.app` (alias automático do Vercel) agora redireciona (308) pra `gabriellabento.com.br`, igual ao domínio `controle-pericias-delta.vercel.app`. Falta ainda publicar o redirect do GitHub Pages antigo (ver item 1 abaixo).
-- **Segurança confirmada ao vivo**: site inteiro com `noindex, nofollow` (Google nunca indexa), `/dashboard` sem sessão não vaza nenhum dado real no HTML, e leitura direta na API do Supabase sem login retorna "permission denied" (RLS bloqueando de verdade, testado na fonte, não só no código).
+### Marcos históricos (resumo)
+- 28/09: banco + app reescrito + Calendar + suíte de testes (hoje 68 testes, `npm run test:db`).
+- 29/09: domínio próprio no ar, OAuth Google em produção, auditoria adversarial planilha × Supabase (2 bugs achados na SUÍTE, não no app — testes corrompiam dado real; corrigidos, dados reconciliados, backup em `backups/2026-09-29/`), paginação mobile 10→50, push + merge no `main`.
 
-### ✅ Madrugada 29/09 — correções críticas, Calendar, Excel, mockup novo
-- **Erro de login intermitente**: mensagem genérica pra qualquer erro trocada por diagnóstico real (rate limit / credencial errada / rede), com 1 retry automático.
-- **Colunas congeladas (bug antigo)**: achada a causa raiz — cabeçalho sem largura fixa, corpo com largura fixa, desalinhavam no scroll. Corrigido.
-- **Calendar backfill**: sincronizado com segurança. Início/entrega já estavam 100% sincronizados (0 faltando). Prazo da fase atual só foi criado pros 2 processos com `fase_changed_at` confiável (mudou de verdade via uso real, não é resíduo da migração) — os outros 20 processos com fase que teria prazo continuam sem evento de propósito, esperando a Gabi confirmar "desde quando está nesta fase" (mesma decisão de segurança de antes, não é esquecimento).
-- **Exportar para Excel**: botão novo no topo do dashboard, gera `.xlsx` com as mesmas colunas da planilha antiga. Usa a distribuição oficial da SheetJS via CDN (não o pacote `xlsx` do npm, que tem prototype pollution/ReDoS sem correção publicada).
-- **Push pro GitHub**: autorizado pelo Robert, mas o classificador de segurança do próprio Claude Code bloqueou a tentativa (`[Out-of-Place Publication]`) — trava da ferramenta, não da IA. Branch `fase2-supabase` está com todos os commits prontos localmente; falta só destravar isso nas configurações do Claude Code ou fazer o push manualmente.
-- **Mockup visual novo**: refinamento sobre a identidade real (mesmas cores/fontes), aguardando aprovação antes de aplicar no código de verdade — nenhuma mudança visual foi feita direto no app sem aprovação, por não haver como conferir renderização real neste ambiente.
-
-### O que falta
-1. **Enviar o branch `fase2-supabase` pro GitHub** — ainda bloqueado esperando autorização explícita do Robert (ação de push é sensível, pede confirmação sempre). App está rodando via deploy direto da CLI do Vercel, não via integração Git ainda. Isso também bloqueia publicar o redirect do GitHub Pages antigo (arquivos já prontos, só falta esse push).
-2. **Testar clicando de verdade a interface completa** (tabela, checklist, proposta) — o que foi testado até agora é auth + Calendar + auditoria de dados; um clique real ponta a ponta na tabela/CRUD ainda não foi feito por um humano.
-3. **Confirmar com a Gabi**: tabela ASPECON 2026 (itens 32/33 idênticos a 2025 — checar com a associação) e o modelo de proposta corrigido.
-4. **Reconectar o Google Calendar uma vez** agora que o app está publicado (ela conectou originalmente ainda em modo "Testando" — reconectar garante token de geração definitiva).
-5. **Backfill do Calendar**: os 35 processos migrados da planilha nunca passaram pela sincronização — a agenda dela só vai ter eventos dos processos criados/editados depois da conexão. Rodar sincronização única pra popular os prazos já existentes (pendente de confirmação do Robert, já que cria ~30-70 eventos reais).
-6. **Fase 4 (visual)**: design já aprovado (mockup "Controle de Perícias"), ainda não aplicado nos componentes reais.
-7. **Exportar para Excel**: botão pedido pelo Robert pra Gabi exportar as perícias (mesmo formato da planilha antiga), sob demanda. Ainda não construído.
-8. **Decisão sobre desligar a planilha/Apps Script de vez**: agora que a auditoria fechou 100% e o Supabase provou estar à frente em uso real, o risco de manter os dois em paralelo é baixo — mas a planilha ainda não deve ser apagada até o item 1 (push) e o item 2 (teste de clique real) estarem resolvidos.
+### Pendências reais (o que falta)
+1. **Redirect do GitHub Pages antigo → `gabriellabento.com.br`.** Arquivos prontos, push que bloqueava já foi feito. Falta publicar na branch `gh-pages`. Risco enquanto não publica: link antigo ainda abre o app da planilha, que **não reflete mais os dados reais** (quem editar lá grava na planilha histórica, não no Supabase). Aguardando o Robert pedir.
+2. **Teste de clique real ponta a ponta** (tabela, edição inline, undo, checklist, proposta/.docx, mobile, filtros) — itens do `INVENTARIO-DE-RECURSOS.md` seguem `[ ]` até Robert/Gabi confirmarem tela por tela. Só viram `[x]` com confirmação humana.
+3. **Gabi preencher "desde quando está nesta fase"** nos processos legados (ela está ciente) → depois rodar sincronização do Calendar pra criar os eventos de prazo restantes.
 
 ### Inventário de recursos que NUNCA pode regredir
 Ver `INVENTARIO-DE-RECURSOS.md` — checklist de toda funcionalidade da versão antiga que tem que sobreviver na nova.
@@ -72,9 +51,9 @@ Ler com `security find-generic-password -a "$USER" -s "<nome>" -w`:
 | `supabase-pericias-gabi-publishable-key` | Chave pública (client-side, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) |
 | `supabase-pericias-gabi-secret-key` | Chave admin — **só servidor** (`SUPABASE_SECRET_KEY`), ignora RLS |
 | `supabase-pericias-gabi-db-password` | Senha do Postgres — só necessária pra conexão direta (scripts de migração/teste) |
-| `supabase-pericias-gabi-temp-password` | Senha temporária de login da Gabi (`bentogabriella97@gmail.com`) — trocar quando ela começar a usar de verdade |
+| `supabase-pericias-gabi-temp-password` | Senha de login da Gabi (`bentogabriella97@gmail.com`) — **definitiva, vai permanecer** (decisão 02/10) |
 | `google-calendar-pericias-client-id` / `-client-secret` | OAuth Client do Google Cloud (projeto "Pericias GB Calendar") — servidor apenas |
-| `vercel-pericias-gabi-token` | Token de deploy do Vercel — **cuidado**: o primeiro que o Robert mandou era de um produto errado (AI Gateway), precisa confirmar que é um Access Token de verdade (Settings → Tokens) |
+| `vercel-pericias-gabi-token` | Token de deploy do Vercel — Access Token funcionando (deploys reais feitos com ele) |
 
 Variáveis completas em `.env.local` (nunca commitado, está no `.gitignore`).
 
@@ -111,7 +90,7 @@ Os eventos vão pro **calendário principal** da Gabi (não um secundário dedic
 
 **Toda rota de `/api/calendar/*` exige `Authorization: Bearer <token de sessão>`** — sem isso, 401. O fluxo de conexão usa `state` anti-CSRF (tabela `oauth_pending_state`, expira em 5min, invalidado no primeiro uso).
 
-**Risco conhecido:** app OAuth ainda em "Testing" no Google Cloud — token pode expirar em 7 dias. Falta o domínio verificado (`gabriellabento.com.br`, pendente do deploy) pra publicar em produção sem essa limitação.
+**App OAuth publicado ("In production")** desde 29/09 — token não expira em 7 dias. Domínio `gabriellabento.com.br` no ar.
 
 ## Testes — `npm run test:db`
 
@@ -125,7 +104,7 @@ Sempre rodar antes de considerar qualquer mudança de backend "pronta".
 
 ## Deploy (mudou — não é mais GitHub Pages)
 
-Como agora tem rotas de servidor (Calendar), não dá mais pra usar `output: 'export'`/GitHub Pages. Alvo é **Vercel**. Processo (em construção, ver seção de status no topo):
+Como tem rotas de servidor (Calendar), não usa `output: 'export'`/GitHub Pages. Produção é **Vercel** (`gabriellabento.com.br`). GitHub guarda só o código (`main`); push lá não publica. Processo:
 ```bash
 npx vercel --token "$(security find-generic-password -a "$USER" -s "vercel-pericias-gabi-token" -w)"
 ```
@@ -154,4 +133,4 @@ Configurar as mesmas variáveis de `.env.local` no painel do Vercel (Settings �
 | `src/components/PericiasTable.tsx` | Tabela — mesma UI de antes, `id` no lugar de `row` |
 | `supabase/schema.sql` | Fonte da verdade do schema do banco |
 | `supabase/tests/*.test.js` | Suíte de testes (rodar com `npm run test:db`) |
-| `pericias-proxy.gs`, planilha Google | **Ainda existem, intocados** — rede de segurança até o corte final (ver plano de fases) |
+| `pericias-proxy.gs`, planilha Google | **Ligados e intocados — base histórica.** O app não usa mais. NÃO alterar (decisão 02/10) |
