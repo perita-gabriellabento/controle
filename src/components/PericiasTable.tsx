@@ -4,10 +4,11 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin, KeyRound, Copy, X, Paperclip, Download, Upload, CalendarClock, Pencil } from 'lucide-react'
 import { Pericia, ChecklistItem, ASPECON_TABLE } from '@/lib/types'
-import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, deleteCustomTask, getChecklistCacheSync, correctFaseChangedAt } from '@/lib/sheets'
+import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, ensureCustomTask, deleteCustomTask, getChecklistCacheSync, correctFaseChangedAt } from '@/lib/sheets'
 import { authedFetch } from '@/lib/supabaseClient'
 import { formatCurrency, formatDate, parseCurrency, toTitleCase } from '@/lib/utils'
 import { utcTimestampToBrazilDate } from '@/lib/businessDays'
+import { ENTREGA_AUTOMATICA_ATIVA, entregaAutomatica, entregaTemAlerta, FASE_IMPUGNACAO, TAREFA_IMPUGNACAO } from '@/lib/prazos'
 import { fetchAnexos, uploadAnexo, deleteAnexo, getAnexoUrl, formatBytes, EXTENSOES_PERMITIDAS, type Anexo } from '@/lib/anexos'
 import EditableCell from '@/components/EditableCell'
 import FaseBadge from '@/components/FaseBadge'
@@ -65,8 +66,10 @@ function triggerCalendarCleanup(periciaId: string) {
   }).catch(() => {})
 }
 
-function dateStatus(isoDate: string): 'overdue' | 'soon' | 'ok' | null {
+function dateStatus(isoDate: string, fase?: string): 'overdue' | 'soon' | 'ok' | null {
   if (!isoDate) return null
+  // Laudo já entregue (Impugnação, Entregue): a data vira só registro, sem "Atrasado"/"Urgente".
+  if (fase && !entregaTemAlerta(fase)) return 'ok'
   const parts = isoDate.split('-')
   if (parts.length !== 3) return null
   const today = new Date()
@@ -762,7 +765,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
     }
   }
 
-  const handleSave = useCallback((row: string, campo: keyof Pericia, valor: string, oldValor: string, silent = false) => {
+  const handleSave = useCallback((row: string, campo: keyof Pericia, valor: string, oldValor: string, silent = false, followUp?: () => Promise<{ ok: boolean; error?: string }>) => {
     const cellKey = `${row}:${String(campo)}`
     const label = CAMPO_LABELS[String(campo)] || String(campo)
 
@@ -807,7 +810,26 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
       try {
         const res = await updatePericia(row, campo, valor)
         if (!res.ok) throw new Error(res.error || 'Falha ao salvar')
+        // Passo extra que precisa gravar ANTES da sincronização com o Calendar (ex.: entrega calculada
+        // junto com o início), pra os dois eventos saírem certos numa única sincronização.
+        if (followUp) {
+          const r2 = await followUp()
+          if (!r2.ok) {
+            toast.error('Não foi possível gravar a entrega calculada', { description: r2.error })
+            invalidateCache()
+            onUpdate()
+          }
+        }
         if (CALENDAR_SYNC_FIELDS.has(campo as string)) triggerCalendarSync(row)
+        // Ao entrar em Impugnação, cria a tarefa "Impugnação" no checklist da perícia (sem duplicar).
+        if (campo === 'fase' && valor === FASE_IMPUGNACAO) {
+          ensureCustomTask(row, TAREFA_IMPUGNACAO).then(created => {
+            if (created) {
+              refetchChecklist()
+              toast.info('Tarefa "Impugnação" criada no checklist')
+            }
+          })
+        }
       } catch (err) {
         revertCache(row, campo, oldValor)
         onUpdate()
@@ -816,7 +838,31 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
         if (!silent) setSyncingCells(s => { const ns = new Set(s); ns.delete(cellKey); return ns })
       }
     }, silent ? 100 : 800))
-  }, [onUpdate])
+  }, [onUpdate, refetchChecklist])
+
+  // Início mudou: calcula a entrega (início + 30 dias corridos) quando ela está vazia ou ainda é a
+  // calculada antes. Entrega digitada à mão pela Gabi nunca é sobrescrita.
+  const handleInicioSave = useCallback((p: Pericia, valor: string) => {
+    const nova = ENTREGA_AUTOMATICA_ATIVA ? entregaAutomatica({ inicioNovo: valor, inicioAntigo: p.inicio, entregaAtual: p.entregaPrevista }) : null
+    if (nova) {
+      const antiga = p.entregaPrevista
+      updateCache(p.id, 'entregaPrevista', nova)
+      onUpdate()
+      toast.info(`Entrega calculada: ${formatDate(nova)}`, {
+        description: '30 dias corridos depois do início',
+        action: {
+          label: '↩ Desfazer',
+          onClick: () => {
+            updateCache(p.id, 'entregaPrevista', antiga)
+            onUpdate()
+            updatePericia(p.id, 'entregaPrevista', antiga).then(() => triggerCalendarSync(p.id))
+          },
+        },
+        duration: 5000,
+      })
+    }
+    handleSave(p.id, 'inicio', valor, p.inicio, false, nova ? () => updatePericia(p.id, 'entregaPrevista', nova) : undefined)
+  }, [handleSave, onUpdate])
 
   function calcHonorarios(proposta: string, origem: string): string {
     const n = parseFloat(proposta) || 0
@@ -1206,13 +1252,13 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                         <EditableCell value={p.inicio} campo="inicio" type="date"
                           syncing={syncingCells.has(`${p.id}:inicio`)}
                           renderDisplay={v => <span className="text-text/70 tabular-nums">{formatDate(v) || '—'}</span>}
-                          onSave={v => handleSave(p.id, 'inicio', v, p.inicio)} />
+                          onSave={v => handleInicioSave(p, v)} />
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <EditableCell value={p.entregaPrevista} campo="entregaPrevista" type="date"
                           syncing={syncingCells.has(`${p.id}:entregaPrevista`)}
                           renderDisplay={v => {
-                            const ds = dateStatus(v)
+                            const ds = dateStatus(v, p.fase)
                             if (!v) return <span className="text-text/30">—</span>
                             const fmt = formatDate(v)
                             if (ds === 'overdue') return (
@@ -1314,7 +1360,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
           const rowPct = rowTotal > 0 ? Math.round((rowDone / rowTotal) * 100) : 0
           const rowProgColor = rowPct === 100 ? '#22C55E' : rowPct > 60 ? '#D4AF37' : rowPct > 0 ? '#F97316' : ''
           const propBadge = p.propostaStatus ? PROPOSTA_BADGE[p.propostaStatus] : null
-          const ds = dateStatus(p.entregaPrevista)
+          const ds = dateStatus(p.entregaPrevista, p.fase)
 
           return (
             <div
@@ -1519,7 +1565,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                       <EditableCell value={p.inicio} campo="inicio" type="date"
                         syncing={syncingCells.has(`${p.id}:inicio`)}
                         renderDisplay={v => <span className="text-[13px] text-text/70 tabular-nums">{formatDate(v) || '—'}</span>}
-                        onSave={v => handleSave(p.id, 'inicio', v, p.inicio)} />
+                        onSave={v => handleInicioSave(p, v)} />
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -1527,7 +1573,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
                       <EditableCell value={p.entregaPrevista} campo="entregaPrevista" type="date"
                         syncing={syncingCells.has(`${p.id}:entregaPrevista`)}
                         renderDisplay={v => {
-                          const s = dateStatus(v)
+                          const s = dateStatus(v, p.fase)
                           if (!v) return <span className="text-[13px] text-text/30">—</span>
                           return <span className={`text-[13px] tabular-nums font-semibold ${s === 'overdue' ? 'text-red-400/90' : s === 'soon' ? 'text-orange-400/90' : 'text-text/70'}`}>{formatDate(v)}</span>
                         }}

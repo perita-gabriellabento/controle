@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { ENTREGA_AUTOMATICA_ATIVA, entregaAutomatica } from '@/lib/prazos'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -84,7 +85,16 @@ export default function NovaPericia({ onCreated }: NovaPericiasProps) {
   function reset() { setForm({ ...EMPTY }) }
 
   function set<K extends keyof typeof EMPTY>(key: K, val: string) {
-    setForm(f => ({ ...f, [key]: val }))
+    setForm(f => {
+      const next = { ...f, [key]: val }
+      // Mesma regra da tabela: início preenche a entrega (início + 30 dias corridos) se ela estiver
+      // vazia ou ainda for a calculada antes; entrega digitada à mão fica como está.
+      if (key === 'inicio' && ENTREGA_AUTOMATICA_ATIVA) {
+        const auto = entregaAutomatica({ inicioNovo: val, inicioAntigo: f.inicio, entregaAtual: f.entregaPrevista })
+        if (auto) next.entregaPrevista = auto
+      }
+      return next
+    })
   }
 
   async function handleSubmit(e: React.FormEvent) {

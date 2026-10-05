@@ -234,7 +234,11 @@ async function testRealDataQuality() {
 
 async function testDateExactness() {
   section('I) Datas migradas idênticas à fonte (sem deslocamento de fuso)');
-  const r = await pgQuery("select numero_processo, entrega_prevista::text, inicio::text from pericias where entrega_prevista is not null order by numero_processo limit 8");
+  // Só linhas que ninguém editou depois da migração (updated_at colado no created_at). Desde que a
+  // Gabi passou a usar o app, a planilha virou base histórica congelada: uma linha editada por ela
+  // diverge da planilha de propósito, e isso não é erro de migração. (Ajustado em 05/10/2026 depois de
+  // conferir que as 2 divergências eram edições reais, com updated_at de 04/10.)
+  const r = await pgQuery("select numero_processo, entrega_prevista::text, inicio::text from pericias where entrega_prevista is not null and updated_at < created_at + interval '1 hour' order by numero_processo limit 8");
   // GAS (Google Apps Script) ocasionalmente devolve uma página de erro HTML transitória sob carga —
   // retry simples evita que um soluço externo derrube a suíte inteira.
   let src;
@@ -256,6 +260,7 @@ async function testDateExactness() {
     if (s.entregaPrevista !== row.entrega_prevista) { allOk = false; bad(`entrega_prevista diverge em ${row.numero_processo}: planilha=${s.entregaPrevista} banco=${row.entrega_prevista}`); }
     if ((s.inicio || null) !== row.inicio) { allOk = false; bad(`inicio diverge em ${row.numero_processo}: planilha=${s.inicio} banco=${row.inicio}`); }
   }
+  if (r.rows.length === 0) { console.log('  ⏭️  pulado: toda perícia com entrega já foi editada depois da migração (esperado após uso real), nada a comparar com a planilha'); return; }
   if (allOk) ok(`${r.rows.length} perícias com datas conferidas caractere-a-caractere`);
 }
 

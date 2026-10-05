@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:db": "node supabase/tests/businessDays.test.js && node supabase/tests/schema.test.js && node supabase/tests/integration.test.js && node supabase/tests/api-security.test.js"
+    "test:db": "node supabase/tests/businessDays.test.js && node supabase/tests/prazos.test.js && node supabase/tests/schema.test.js && node supabase/tests/integration.test.js && node supabase/tests/api-security.test.js"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.1.2",
