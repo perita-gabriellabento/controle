@@ -8,6 +8,7 @@ import { updatePericia, archivePericia, deletePericia, updateCache, revertCache,
 import { authedFetch } from '@/lib/supabaseClient'
 import { formatCurrency, formatDate, parseCurrency, toTitleCase } from '@/lib/utils'
 import { utcTimestampToBrazilDate } from '@/lib/businessDays'
+import { filtrarPorBusca } from '@/lib/busca'
 import { ENTREGA_AUTOMATICA_ATIVA, entregaAutomatica, entregaTemAlerta, FASE_IMPUGNACAO, TAREFA_IMPUGNACAO } from '@/lib/prazos'
 import { fetchAnexos, uploadAnexo, deleteAnexo, getAnexoUrl, formatBytes, EXTENSOES_PERMITIDAS, type Anexo } from '@/lib/anexos'
 import EditableCell from '@/components/EditableCell'
@@ -85,15 +86,8 @@ function dateStatus(isoDate: string, fase?: string): 'overdue' | 'soon' | 'ok' |
 function applyFilters(pericias: Pericia[], f: Filters): Pericia[] {
   let list = pericias.filter(p => !p.arquivado)
   if (f.search) {
-    const q = f.search.toLowerCase()
-    list = list.filter(p =>
-      p.poloAtivo.toLowerCase().includes(q) ||
-      p.poloPassivo.toLowerCase().includes(q) ||
-      p.numeroProcesso.toLowerCase().includes(q) ||
-      p.assunto.toLowerCase().includes(q) ||
-      p.cidade.toLowerCase().includes(q) ||
-      p.vara.toLowerCase().includes(q)
-    )
+    // Busca tolerante a acento e a erro de digitação (ver src/lib/busca.ts).
+    list = filtrarPorBusca(list, f.search, p => [p.poloAtivo, p.poloPassivo, p.numeroProcesso, p.assunto, p.cidade, p.vara, p.fase, p.tipo])
   }
   if (f.fase)   list = list.filter(p => p.fase === f.fase)
   if (f.tipo)   list = list.filter(p => p.tipo === f.tipo)
