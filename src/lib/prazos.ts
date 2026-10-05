@@ -11,10 +11,9 @@ export const TAREFA_IMPUGNACAO = 'Impugnação'
 // Se cair em fim de semana ou feriado, mantém a data como saiu (resposta da Gabi).
 export const PRAZO_ENTREGA_DIAS = 30
 
-// DESLIGADO de propósito (05/10/2026): a Gabi respondeu "30 dias corridos", mas nas perícias dela
-// 3 de 9 entregas estão no mesmo dia do mês seguinte (31 dias) e só 2 têm exatamente 30. Só liga
-// depois que ela confirmar se a regra é "30 dias corridos" ou "1 mês". Ligar = trocar pra true.
-export const ENTREGA_AUTOMATICA_ATIVA = false
+// Ligado em 05/10/2026 depois da confirmação da Gabi (rodada 2): "30 dias corridos". Ela foi
+// perguntada porque 3 de 9 entregas dela estão no mesmo dia do mês seguinte (31 dias); manteve 30.
+export const ENTREGA_AUTOMATICA_ATIVA = true
 
 export function calcEntregaAuto(inicioISO: string): string {
   return addCalendarDays(inicioISO, PRAZO_ENTREGA_DIAS)

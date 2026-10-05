@@ -4,10 +4,10 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin, KeyRound, Copy, X, Paperclip, Download, Upload, CalendarClock, Pencil } from 'lucide-react'
 import { Pericia, ChecklistItem, ASPECON_TABLE } from '@/lib/types'
-import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, ensureCustomTask, deleteCustomTask, getChecklistCacheSync, correctFaseChangedAt } from '@/lib/sheets'
+import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, ensureCustomTask, deleteCustomTask, getChecklistCacheSync, correctFaseChangedAt, fetchFasePrazos, type FasePrazo } from '@/lib/sheets'
 import { authedFetch } from '@/lib/supabaseClient'
 import { formatCurrency, formatDate, parseCurrency, toTitleCase } from '@/lib/utils'
-import { utcTimestampToBrazilDate } from '@/lib/businessDays'
+import { utcTimestampToBrazilDate, calcPrazo } from '@/lib/businessDays'
 import { filtrarPorBusca } from '@/lib/busca'
 import { ENTREGA_AUTOMATICA_ATIVA, entregaAutomatica, entregaTemAlerta, FASE_IMPUGNACAO, TAREFA_IMPUGNACAO } from '@/lib/prazos'
 import { fetchAnexos, uploadAnexo, deleteAnexo, getAnexoUrl, formatBytes, EXTENSOES_PERMITIDAS, type Anexo } from '@/lib/anexos'
@@ -173,6 +173,15 @@ function FaseChangedCorrector({ pericia: p, onUpdate }: { pericia: Pericia; onUp
   const currentDateISO = p.faseChangedAt ? utcTimestampToBrazilDate(p.faseChangedAt) : ''
   const [value, setValue] = useState(currentDateISO)
   const [saving, setSaving] = useState(false)
+  const [prazoFase, setPrazoFase] = useState<FasePrazo | null>(null)
+  useEffect(() => {
+    let vivo = true
+    fetchFasePrazos().then(m => { if (vivo) setPrazoFase(m[p.fase] || null) })
+    return () => { vivo = false }
+  }, [p.fase])
+  // Data final do prazo da fase: mesma conta que o Calendar usa (fase_prazos + data de entrada na fase).
+  const prazoFinal = prazoFase && currentDateISO ? calcPrazo(currentDateISO, prazoFase.dias, prazoFase.dias_tipo) : ''
+  const naImpugnacao = p.fase === FASE_IMPUGNACAO
 
   async function handleSave() {
     if (!value) return
@@ -190,11 +199,11 @@ function FaseChangedCorrector({ pericia: p, onUpdate }: { pericia: Pericia; onUp
   }
 
   return (
-    <div className="flex items-center gap-2 px-5 py-2.5 text-[11.5px] font-montserrat" style={{ borderBottom: '1px solid var(--comp-row-border)', color: 'var(--muted)' }}>
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-5 py-2.5 text-[11.5px] font-montserrat" style={{ borderBottom: '1px solid var(--comp-row-border)', color: 'var(--muted)' }}>
       <CalendarClock size={12} className="flex-shrink-0" />
       {editing ? (
         <>
-          <span>Nesta fase (&quot;{p.fase}&quot;) desde:</span>
+          <span>{naImpugnacao ? 'Data da intimação (início do prazo de impugnação):' : <>Nesta fase (&quot;{p.fase}&quot;) desde:</>}</span>
           <input
             type="date"
             value={value}
@@ -217,7 +226,10 @@ function FaseChangedCorrector({ pericia: p, onUpdate }: { pericia: Pericia; onUp
       ) : (
         <>
           <span>
-            Nesta fase (&quot;{p.fase}&quot;) desde <b className="text-text/70">{currentDateISO ? formatDate(currentDateISO) : '—'}</b>
+            {naImpugnacao ? 'Intimação (início do prazo de impugnação) em' : <>Nesta fase (&quot;{p.fase}&quot;) desde</>} <b className="text-text/70">{currentDateISO ? formatDate(currentDateISO) : '—'}</b>
+            {prazoFinal && prazoFase && (
+              <> · Prazo final <b className="text-text/70">{formatDate(prazoFinal)}</b> ({prazoFase.dias} dias {prazoFase.dias_tipo === 'uteis' ? 'úteis' : 'corridos'})</>
+            )}
           </span>
           <button
             onClick={() => setEditing(true)}

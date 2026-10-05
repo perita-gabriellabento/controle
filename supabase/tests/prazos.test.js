@@ -40,7 +40,7 @@ for (const [fase, esperado] of [
 ]) eq(P.entregaTemAlerta(fase), esperado, `alerta de entrega em "${fase || '(sem fase)'}"`)
 
 console.log('\n== Interruptor ==')
-eq(P.ENTREGA_AUTOMATICA_ATIVA, false, 'cálculo automático da entrega segue desligado até a Gabi confirmar a regra (30 dias ou 1 mês)')
+eq(P.ENTREGA_AUTOMATICA_ATIVA, true, 'cálculo automático da entrega ligado (Gabi confirmou 30 dias corridos na rodada 2)')
 
 console.log('\n== Constantes ==')
 eq(P.FASE_IMPUGNACAO, 'Impugnação de laudo', 'nome da fase confere com o CHECK do banco')

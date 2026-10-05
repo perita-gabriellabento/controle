@@ -142,6 +142,18 @@ export function getChecklistCacheSync(): ChecklistItem[] {
   return _checklistCache ? [..._checklistCache] : []
 }
 
+// ── Prazos por fase (tabela fase_prazos, a mesma que o Calendar usa) ──
+export type FasePrazo = { dias: number; dias_tipo: 'uteis' | 'corridos' }
+let _fasePrazosCache: Record<string, FasePrazo> | null = null
+export async function fetchFasePrazos(): Promise<Record<string, FasePrazo>> {
+  if (_fasePrazosCache) return _fasePrazosCache
+  const { data, error } = await withRetry<any[]>(() => supabase.from('fase_prazos').select('fase, dias, dias_tipo') as any)
+  if (error || !data) return {}
+  const mapa: Record<string, FasePrazo> = Object.fromEntries(data.map(r => [r.fase, { dias: r.dias, dias_tipo: r.dias_tipo }]))
+  _fasePrazosCache = mapa
+  return mapa
+}
+
 // ── Checklist: tarefas customizadas ───────────────────────────
 
 export async function addCustomTask(pericia_row: string, descricao: string): Promise<ApiResponse & { id?: string }> {
