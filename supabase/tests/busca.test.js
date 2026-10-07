@@ -7,7 +7,7 @@ execFileSync(path.join(root, 'node_modules/.bin/tsc'), [path.join(root, 'src/lib
 const { filtrarPorBusca, normalizar } = require(path.join(out, 'busca.js'))
 
 const base = [
-  { id: 1, campos: ['Amélia Souza Campos', 'Banco do Brasil SA', '1234567-89.2023.8.09.0051', 'Verificar Abusividade e Capitalização de Juros', 'Goiânia', '3ª Vara Cível', 'Impugnação de laudo', 'Particular'] },
+  { id: 1, campos: ['Amélia Maria Souza Campos', 'Banco do Brasil SA', '1234567-89.2023.8.09.0051', 'Verificar Abusividade e Capitalização de Juros', 'Goiânia', '3ª Vara Cível', 'Impugnação de laudo', 'Particular'] },
   { id: 2, campos: ['Jorge Duarte Lima', 'Aymoré Crédito, Financiamento e Investimento S.A.', '7654321-00.2025.8.09.0011', 'Verificar Abusividade e Capitalização de Juros', 'Aparecida de Goiânia', '1ª Vara', 'Em produção', 'Particular'] },
   { id: 3, campos: ['Maria José Alves', 'Banco Bradesco', '1000001-11.2024.8.09.0001', 'Revisão de contrato', 'Anápolis', '2ª Vara', 'Entregue', 'Judicial'] },
   { id: 4, campos: ['Marta Souza Lima', 'Caixa Econômica Federal', '2000002-22.2024.8.09.0002', 'Cálculo trabalhista', 'Rio Verde', 'Vara do Trabalho', 'Entregue', 'Judicial'] },
@@ -53,7 +53,7 @@ eq(ids('goiania amelya'), '1', 'duas palavras, uma com erro')
 console.log('\n== Sem falso positivo ==')
 eq(ids('xyzxyz'), '', 'palavra sem parecido não traz nada')
 eq(ids('bb'), '', 'palavra curta não é aproximada')
-eq(ids('12345678'), '', 'número que não existe não é aproximado')
+eq(ids('99999999'), '', 'número que não existe não é aproximado')
 eq(ids('amelia zzzzzz'), '', 'uma palavra certa e outra inexistente: nada (todas precisam casar)')
 eq(ids(''), '1,2,3,4', 'busca vazia mostra tudo')
 eq(ids('   '), '1,2,3,4', 'só espaços mostra tudo')
