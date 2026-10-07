@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Loader2 } from 'lucide-react'
 import { FASES, TIPOS, ORIGENS, UFS } from '@/lib/types'
+import { dataValida } from '@/lib/prazos'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export type EditType =
@@ -69,8 +70,10 @@ export default function EditableCell({
   const commit = useCallback((val: string) => {
     setEditing(false)
     if (val === value) return
+    // Data incompleta ou implausível (ex.: ano 0202 de uma digitação interrompida) não é gravada.
+    if (type === 'date' && val && !dataValida(val)) { setDraft(value); return }
     onSave(val)
-  }, [value, onSave])
+  }, [value, onSave, type])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') commit(draft)
