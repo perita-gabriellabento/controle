@@ -16,6 +16,7 @@ import KPICards from '@/components/KPICards'
 import PericiasTable from '@/components/PericiasTable'
 import FilterBar, { type Filters } from '@/components/FilterBar'
 import NovaPericia from '@/components/NovaPericia'
+import ArquivadosDialog from '@/components/ArquivadosDialog'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -244,6 +245,7 @@ function DashboardContent() {
             >
               <FileSpreadsheet size={15} className={exporting ? 'animate-pulse' : ''} />
             </button>
+            <ArquivadosDialog pericias={pericias} onChanged={handleUpdate} />
             <button
               onClick={() => setPinDialogOpen(true)}
               className="icon-btn w-8 h-8 sm:w-9 sm:h-9"

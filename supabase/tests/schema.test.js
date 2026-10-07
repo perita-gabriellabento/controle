@@ -103,6 +103,18 @@ async function testCheckConstraints() {
     { label: 'proposta_categoria fora de 1-33 (0)', payload: { polo_ativo:'x', polo_passivo:'x', numero_processo:'TEST-C6', proposta_categoria: 0 } },
     { label: 'proposta_status inválido', payload: { polo_ativo:'x', polo_passivo:'x', numero_processo:'TEST-C7', proposta_status: 'Cancelada' } },
   ];
+  // Fase "Revogado" (adicionada em 07/10/2026) precisa ser ACEITA pelo banco, e arquivar/reabrir precisa ir e voltar.
+  const { data: rev, error: revErr } = await sbAdmin.from('pericias').insert({ polo_ativo:'Teste Revogado', polo_passivo:'x', numero_processo:'TEST-REV1', fase: 'Revogado' }).select('id, fase, arquivado').single();
+  if (!revErr && rev.fase === 'Revogado') ok('aceita fase "Revogado"');
+  else bad('fase "Revogado" rejeitada pelo banco: ' + (revErr && revErr.message));
+  if (rev) {
+    const { error: aErr } = await sbAdmin.from('pericias').update({ arquivado: true }).eq('id', rev.id);
+    const { error: bErr } = await sbAdmin.from('pericias').update({ arquivado: false }).eq('id', rev.id);
+    const { data: back } = await sbAdmin.from('pericias').select('arquivado').eq('id', rev.id).single();
+    if (!aErr && !bErr && back && back.arquivado === false) ok('arquivar e reabrir (arquivado true -> false) funcionam');
+    else bad('arquivar/reabrir falhou: ' + ((aErr || bErr) && (aErr || bErr).message));
+    await sbAdmin.from('pericias').delete().eq('id', rev.id);
+  }
   for (const t of badInserts) {
     const { error } = await sbAdmin.from('pericias').insert(t.payload);
     if (error) ok(`rejeitado: ${t.label}`);

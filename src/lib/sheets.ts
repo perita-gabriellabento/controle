@@ -233,6 +233,15 @@ export async function archivePericia(id: string): Promise<ApiResponse> {
   return { ok: true }
 }
 
+// Reabre um processo arquivado: volta pra tabela e pros totais. Quem chama dispara a sincronização
+// do Calendar, que recria os eventos (o arquivamento apaga os 3).
+export async function unarchivePericia(id: string): Promise<ApiResponse> {
+  const { error } = await withRetry(() => supabase.from('pericias').update({ arquivado: false }).eq('id', id) as any)
+  if (error) return { ok: false, error: error.message }
+  invalidateCache()
+  return { ok: true }
+}
+
 export async function deletePericia(id: string): Promise<ApiResponse> {
   const { error } = await withRetry(() => supabase.from('pericias').delete().eq('id', id) as any)
   if (error) return { ok: false, error: error.message }
