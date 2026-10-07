@@ -163,16 +163,6 @@ export async function addCustomTask(pericia_row: string, descricao: string): Pro
   return { ok: true, id: data.id }
 }
 
-// Cria uma tarefa específica na perícia só se ela ainda não existir (conferindo no banco, não no cache),
-// pra trocar de fase várias vezes nunca duplicar. Devolve true se criou.
-export async function ensureCustomTask(periciaId: string, descricao: string): Promise<boolean> {
-  const { data: existing, error: readErr } = await supabase
-    .from('checklist_items').select('id').eq('pericia_id', periciaId).ilike('descricao', descricao).limit(1)
-  if (readErr || (existing && existing.length > 0)) return false
-  const res = await addCustomTask(periciaId, descricao)
-  return res.ok
-}
-
 export async function deleteCustomTask(task_id: string): Promise<ApiResponse> {
   const { error } = await withRetry(() => supabase.from('checklist_items').delete().eq('id', task_id) as any)
   if (error) return { ok: false, error: error.message }

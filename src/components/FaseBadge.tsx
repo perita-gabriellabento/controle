@@ -14,6 +14,7 @@ const FASE_LABELS: Partial<Record<string, string>> = {
   'Proposta de honorários':                            'Proposta honor.',
   'Aguardando recebimento honorários':                 'Ag. recebimento',
   'Aguardando intimação para proposta de honorários':  'Ag. intimação proposta',
+  'Revogado':                                          'Revogado',
 }
 
 export default function FaseBadge({ fase, size = 'default' }: FaseBadgeProps) {

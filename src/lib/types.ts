@@ -7,6 +7,7 @@ export type Fase =
   | 'Proposta de honorários'
   | 'Aguardando recebimento honorários'
   | 'Aguardando intimação para proposta de honorários'
+  | 'Revogado'
   | ''
 
 export type Tipo = 'Particular' | 'Assistência Judiciária Gratuita' | ''
@@ -81,6 +82,7 @@ export const FASES: Fase[] = [
   'Proposta de honorários',
   'Aguardando recebimento honorários',
   'Aguardando intimação para proposta de honorários',
+  'Revogado',
 ]
 
 export const TIPOS: Tipo[] = ['Particular', 'Assistência Judiciária Gratuita']
@@ -97,6 +99,7 @@ export const FASE_COLORS: Record<string, { bg: string; text: string; border: str
   'Proposta de honorários':                             { bg: 'rgba(107,114,128,0.15)',text: '#9CA3AF', border: 'rgba(107,114,128,0.3)' },
   'Aguardando recebimento honorários':                  { bg: 'rgba(139,92,246,0.15)', text: '#8B5CF6', border: 'rgba(139,92,246,0.3)' },
   'Aguardando intimação para proposta de honorários':   { bg: 'rgba(55,65,81,0.3)',    text: '#6B7280', border: 'rgba(55,65,81,0.5)' },
+  'Revogado':                                           { bg: 'rgba(219,39,119,0.15)', text: '#DB2777', border: 'rgba(219,39,119,0.35)' },
 }
 
 // Tabela ASPECON-GO — Resolução nº 001/2026 (27/03/2026), em vigor desde então,

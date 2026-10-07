@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireAuth } from '@/lib/apiAuth'
 import { upsertDeadlineEvent, deleteDeadlineEvent } from '@/lib/googleCalendar'
 import { calcPrazo, utcTimestampToBrazilDate } from '@/lib/businessDays'
+import { FASE_REVOGADO } from '@/lib/prazos'
 
 // Reconcilia os 3 eventos possíveis de uma perícia (início, entrega prevista,
 // prazo da fase atual) com o estado atual do banco — sempre parte da verdade
@@ -42,8 +43,8 @@ export async function POST(req: NextRequest) {
   const updates: Record<string, string | null> = {}
 
   try {
-    // Se arquivada, remove os 3 eventos e encerra.
-    if (p.arquivado) {
+    // Se arquivada ou revogada, remove os 3 eventos e encerra.
+    if (p.arquivado || p.fase === FASE_REVOGADO) {
       await Promise.all([
         p.google_event_id_inicio ? deleteDeadlineEvent(p.google_event_id_inicio) : null,
         p.google_event_id_entrega ? deleteDeadlineEvent(p.google_event_id_entrega) : null,
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
       await supabaseAdmin.from('pericias').update({
         google_event_id_inicio: null, google_event_id_entrega: null, google_event_id_prazo_fase: null,
       }).eq('id', periciaId)
-      return NextResponse.json({ ok: true, arquivado: true })
+      return NextResponse.json({ ok: true, arquivado: !!p.arquivado, revogado: p.fase === FASE_REVOGADO })
     }
 
     // ── Início ──

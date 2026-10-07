@@ -5,7 +5,7 @@
 import { addCalendarDays } from './businessDays'
 
 export const FASE_IMPUGNACAO = 'Impugnação de laudo'
-export const TAREFA_IMPUGNACAO = 'Impugnação'
+export const FASE_REVOGADO = 'Revogado'
 
 // Entrega do laudo = início + 30 dias corridos, vale pra todos os tipos de perícia.
 // Se cair em fim de semana ou feriado, mantém a data como saiu (resposta da Gabi).
@@ -34,8 +34,15 @@ export function entregaAutomatica(args: { inicioNovo: string; inicioAntigo: stri
 }
 
 // Fases em que o laudo já foi entregue: a coluna Entrega vira só registro, sem "Atrasado"/"Urgente".
-export const FASES_SEM_ALERTA_ENTREGA = new Set<string>([FASE_IMPUGNACAO, 'Entregue'])
+export const FASES_SEM_ALERTA_ENTREGA = new Set<string>([FASE_IMPUGNACAO, 'Entregue', FASE_REVOGADO])
 
 export function entregaTemAlerta(fase: string): boolean {
   return !FASES_SEM_ALERTA_ENTREGA.has(fase)
+}
+
+// Processo revogado (resposta da Gabi, 07/10/2026): fica visível na tabela com a fase "Revogado",
+// mas sai de TODOS os totais (KPIs, rodapé, filtros de "A receber" e "Recebido") e não tem eventos
+// na agenda, igual a um arquivado.
+export function contaNosTotais(p: { fase?: string; arquivado?: boolean }): boolean {
+  return !p.arquivado && p.fase !== FASE_REVOGADO
 }

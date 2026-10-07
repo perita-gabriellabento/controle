@@ -1,4 +1,5 @@
 import { Pericia } from '@/lib/types'
+import { contaNosTotais } from '@/lib/prazos'
 import { formatCurrency } from '@/lib/utils'
 import { Scale, TrendingDown, CheckCircle, Clock, FileText, TrendingUp } from 'lucide-react'
 
@@ -15,7 +16,7 @@ function parseMoney(v: string): number {
 }
 
 export default function KPICards({ pericias, activeFilter, onCardClick }: KPICardsProps) {
-  const ativos = pericias.filter(p => !p.arquivado)
+  const ativos = pericias.filter(contaNosTotais) // revogado e arquivado ficam fora de todos os totais
 
   let totalHonorarios = 0
   let totalRecebido = 0

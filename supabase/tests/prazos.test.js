@@ -33,18 +33,25 @@ eq(P.entregaAutomatica({ inicioNovo: '2026-10-15', inicioAntigo: '2026-10-01', e
 
 console.log('\n== "Atrasado" só onde o laudo ainda não foi entregue ==')
 for (const [fase, esperado] of [
-  ['Impugnação de laudo', false], ['Entregue', false],
+  ['Impugnação de laudo', false], ['Entregue', false], ['Revogado', false],
   ['Em produção', true], ['Em diligência', true], ['Proposta de honorários', true],
   ['Aguardando intimação para início', true], ['Aguardando recebimento honorários', true],
   ['Aguardando intimação para proposta de honorários', true], ['', true],
 ]) eq(P.entregaTemAlerta(fase), esperado, `alerta de entrega em "${fase || '(sem fase)'}"`)
+
+console.log('\n== Revogado e arquivado ficam fora dos totais ==')
+eq(P.contaNosTotais({ fase: 'Em produção', arquivado: false }), true, 'processo normal conta')
+eq(P.contaNosTotais({ fase: 'Revogado', arquivado: false }), false, 'revogado não conta')
+eq(P.contaNosTotais({ fase: 'Entregue', arquivado: true }), false, 'arquivado não conta')
+eq(P.contaNosTotais({ fase: 'Revogado', arquivado: true }), false, 'revogado e arquivado não conta')
+eq(P.contaNosTotais({}), true, 'sem fase conta (como antes)')
 
 console.log('\n== Interruptor ==')
 eq(P.ENTREGA_AUTOMATICA_ATIVA, true, 'cálculo automático da entrega ligado (Gabi confirmou 30 dias corridos na rodada 2)')
 
 console.log('\n== Constantes ==')
 eq(P.FASE_IMPUGNACAO, 'Impugnação de laudo', 'nome da fase confere com o CHECK do banco')
-eq(P.TAREFA_IMPUGNACAO, 'Impugnação', 'nome da tarefa')
+eq(P.FASE_REVOGADO, 'Revogado', 'nome da fase Revogado')
 
 fs.rmSync(out, { recursive: true, force: true })
 console.log(`\n${pass} ok, ${fail} falhas`)

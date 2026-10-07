@@ -30,6 +30,7 @@ const FASE_LABELS: Partial<Record<string, string>> = {
   'Proposta de honorários':                            'Proposta honor.',
   'Aguardando recebimento honorários':                 'Ag. recebimento',
   'Aguardando intimação para proposta de honorários':  'Ag. intimação proposta',
+  'Revogado':                                          'Revogado',
 }
 
 const SELECT_CLASS = "h-10 rounded-lg bg-surface border border-[var(--border)] px-3 text-[14px] text-text focus:outline-none focus:border-gold/50 cursor-pointer w-full sm:w-auto"

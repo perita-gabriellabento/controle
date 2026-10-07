@@ -47,7 +47,7 @@ create table if not exists pericias (
                               'Entregue','Impugnação de laudo','Em diligência',
                               'Aguardando intimação para início','Em produção',
                               'Proposta de honorários','Aguardando recebimento honorários',
-                              'Aguardando intimação para proposta de honorários'
+                              'Aguardando intimação para proposta de honorários','Revogado'
                             )),
   arquivado                 boolean not null default false,
 

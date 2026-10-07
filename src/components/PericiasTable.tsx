@@ -4,12 +4,13 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Archive, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, FileText, CheckSquare, Plus, Trash2, Loader2 as Spin, KeyRound, Copy, X, Paperclip, Download, Upload, CalendarClock, Pencil } from 'lucide-react'
 import { Pericia, ChecklistItem, ASPECON_TABLE } from '@/lib/types'
-import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, ensureCustomTask, deleteCustomTask, getChecklistCacheSync, correctFaseChangedAt, fetchFasePrazos, type FasePrazo } from '@/lib/sheets'
+import { updatePericia, archivePericia, deletePericia, updateCache, revertCache, invalidateCache, fetchChecklist, saveChecklistStatus, addCustomTask, deleteCustomTask, getChecklistCacheSync, correctFaseChangedAt, fetchFasePrazos, type FasePrazo } from '@/lib/sheets'
 import { authedFetch } from '@/lib/supabaseClient'
 import { formatCurrency, formatDate, parseCurrency, toTitleCase } from '@/lib/utils'
 import { utcTimestampToBrazilDate, calcPrazo } from '@/lib/businessDays'
 import { filtrarPorBusca } from '@/lib/busca'
-import { ENTREGA_AUTOMATICA_ATIVA, entregaAutomatica, entregaTemAlerta, FASE_IMPUGNACAO, TAREFA_IMPUGNACAO } from '@/lib/prazos'
+import { contaNosTotais } from '@/lib/prazos'
+import { ENTREGA_AUTOMATICA_ATIVA, entregaAutomatica, entregaTemAlerta, FASE_IMPUGNACAO } from '@/lib/prazos'
 import { fetchAnexos, uploadAnexo, deleteAnexo, getAnexoUrl, formatBytes, EXTENSOES_PERMITIDAS, type Anexo } from '@/lib/anexos'
 import EditableCell from '@/components/EditableCell'
 import FaseBadge from '@/components/FaseBadge'
@@ -93,8 +94,8 @@ function applyFilters(pericias: Pericia[], f: Filters): Pericia[] {
   if (f.tipo)   list = list.filter(p => p.tipo === f.tipo)
   if (f.uf)     list = list.filter(p => p.uf === f.uf)
   if (f.origem) list = list.filter(p => p.origem === f.origem)
-  if (f.cardFilter === 'a_receber')   list = list.filter(p => parseCurrency(p.valorHonorarios) > parseCurrency(p.honorariosRecebidos))
-  if (f.cardFilter === 'recebido')    list = list.filter(p => parseCurrency(p.honorariosRecebidos) > 0)
+  if (f.cardFilter === 'a_receber')   list = list.filter(p => contaNosTotais(p) && parseCurrency(p.valorHonorarios) > parseCurrency(p.honorariosRecebidos))
+  if (f.cardFilter === 'recebido')    list = list.filter(p => contaNosTotais(p) && parseCurrency(p.honorariosRecebidos) > 0)
   if (f.cardFilter === 'em_producao') list = list.filter(p => p.fase === 'Em produção')
   if (f.cardFilter === 'entregue')    list = list.filter(p => p.fase === 'Entregue')
   if (f.cardFilter === 'em_proposta') list = list.filter(p => p.fase === 'Proposta de honorários')
@@ -827,15 +828,6 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
           }
         }
         if (CALENDAR_SYNC_FIELDS.has(campo as string)) triggerCalendarSync(row)
-        // Ao entrar em Impugnação, cria a tarefa "Impugnação" no checklist da perícia (sem duplicar).
-        if (campo === 'fase' && valor === FASE_IMPUGNACAO) {
-          ensureCustomTask(row, TAREFA_IMPUGNACAO).then(created => {
-            if (created) {
-              refetchChecklist()
-              toast.info('Tarefa "Impugnação" criada no checklist')
-            }
-          })
-        }
       } catch (err) {
         revertCache(row, campo, oldValor)
         onUpdate()
@@ -844,7 +836,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
         if (!silent) setSyncingCells(s => { const ns = new Set(s); ns.delete(cellKey); return ns })
       }
     }, silent ? 100 : 800))
-  }, [onUpdate, refetchChecklist])
+  }, [onUpdate])
 
   // Início mudou: calcula a entrega (início + 30 dias corridos) quando ela está vazia ou ainda é a
   // calculada antes. Entrega digitada à mão pela Gabi nunca é sobrescrita.
@@ -961,6 +953,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
   const { totalVProposta, totalHonorarios, totalRecebido, totalAReceber } = useMemo(() => {
     let vp = 0, hon = 0, rec = 0, ar = 0
     for (const p of filtered) {
+      if (!contaNosTotais(p)) continue // revogado não entra nos totais do rodapé
       const h = parseCurrency(p.valorHonorarios)
       const r = parseCurrency(p.honorariosRecebidos)
       vp += parseCurrency(p.valorPropostaHonorarios || '')
