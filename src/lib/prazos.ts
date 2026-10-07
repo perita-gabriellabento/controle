@@ -24,12 +24,31 @@ export function calcEntregaAuto(inicioISO: string): string {
 //  - entrega vazia: preenche;
 //  - entrega igual ao que o app calcularia pro início ANTERIOR: era automática, recalcula;
 //  - qualquer outra: a Gabi digitou à mão, mantém.
+// Só aceita data completa e plausível. O campo de data do navegador emite valores
+// intermediários enquanto se digita o ano (0002, 0020, 0202...), que não podem virar prazo.
+export function dataValida(iso: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '')
+  if (!m) return false
+  const y = +m[1], mo = +m[2], d = +m[3]
+  if (y < 1900 || y > 2100) return false
+  const dt = new Date(Date.UTC(y, mo - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d
+}
+
+// Início apagado: se a entrega era exatamente a calculada a partir dele, ela some junto
+// (devolve ''); se a Gabi digitou a entrega à mão, fica (devolve null).
+export function entregaAoLimparInicio(args: { inicioAntigo: string; entregaAtual: string }): string | null {
+  const { inicioAntigo, entregaAtual } = args
+  if (!dataValida(inicioAntigo) || !entregaAtual) return null
+  return entregaAtual === calcEntregaAuto(inicioAntigo) ? '' : null
+}
+
 export function entregaAutomatica(args: { inicioNovo: string; inicioAntigo: string; entregaAtual: string }): string | null {
   const { inicioNovo, inicioAntigo, entregaAtual } = args
-  if (!inicioNovo) return null
+  if (!dataValida(inicioNovo)) return null
   const nova = calcEntregaAuto(inicioNovo)
   if (!entregaAtual) return nova
-  if (inicioAntigo && entregaAtual === calcEntregaAuto(inicioAntigo)) return nova === entregaAtual ? null : nova
+  if (dataValida(inicioAntigo) && entregaAtual === calcEntregaAuto(inicioAntigo)) return nova === entregaAtual ? null : nova
   return null
 }
 

@@ -10,6 +10,7 @@ execFileSync(path.join(root, 'node_modules/.bin/tsc'), [
   '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck',
 ], { stdio: 'inherit' })
 const P = require(path.join(out, 'prazos.js'))
+const B = require(path.join(out, 'businessDays.js'))
 
 let pass = 0, fail = 0
 function eq(actual, expected, label) {
@@ -30,6 +31,20 @@ eq(P.entregaAutomatica({ inicioNovo: '2026-10-20', inicioAntigo: '2026-10-15', e
 eq(P.entregaAutomatica({ inicioNovo: '', inicioAntigo: '2026-10-15', entregaAtual: '2026-11-14' }), null, 'início apagado: não mexe na entrega')
 eq(P.entregaAutomatica({ inicioNovo: '2026-10-15', inicioAntigo: '2026-10-15', entregaAtual: '2026-11-14' }), null, 'mesma data: nada a fazer')
 eq(P.entregaAutomatica({ inicioNovo: '2026-10-15', inicioAntigo: '2026-10-01', entregaAtual: '2026-08-01' }), null, 'entrega antiga digitada (caso real): mantém')
+
+console.log('\n== Datas inválidas e valores intermediários do campo de data (auditoria 07/10) ==')
+for (const [v, esperado] of [['2026-10-15', true], ['0002-10-15', false], ['0026-03-05', false], ['1899-12-31', false], ['2101-01-01', false], ['2026-02-30', false], ['2026-13-01', false], ['', false], ['2026-10-1', false], ['abc', false]])
+  eq(P.dataValida(v), esperado, `dataValida("${v}")`)
+eq(P.entregaAutomatica({ inicioNovo: '0002-10-15', inicioAntigo: '', entregaAtual: '' }), null, 'ano intermediário (0002) não gera entrega')
+eq(P.entregaAutomatica({ inicioNovo: '0202-10-15', inicioAntigo: '2026-10-15', entregaAtual: '2026-11-14' }), null, 'ano intermediário não mexe na entrega que já existe')
+eq(B.addCalendarDays('0026-03-05', 30), '0026-04-04', 'businessDays: ano < 100 não vira 19xx')
+eq(B.addCalendarDays('2026-12-20', 30), '2027-01-19', 'businessDays: virada de ano')
+
+console.log('\n== Apagar e redigitar o início ==')
+eq(P.entregaAoLimparInicio({ inicioAntigo: '2026-10-15', entregaAtual: '2026-11-14' }), '', 'apagar início: some a entrega que era calculada')
+eq(P.entregaAoLimparInicio({ inicioAntigo: '2026-10-15', entregaAtual: '2026-12-01' }), null, 'apagar início: entrega digitada à mão fica')
+eq(P.entregaAoLimparInicio({ inicioAntigo: '', entregaAtual: '2026-11-14' }), null, 'apagar início sem início antigo: não mexe')
+eq(P.entregaAutomatica({ inicioNovo: '2026-10-20', inicioAntigo: '', entregaAtual: '' }), '2026-11-19', 'depois de apagar, digitar outro início recalcula (entrega estava vazia)')
 
 console.log('\n== "Atrasado" só onde o laudo ainda não foi entregue ==')
 for (const [fase, esperado] of [

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FaseBadge from '@/components/FaseBadge'
 import { unarchivePericia } from '@/lib/sheets'
 import { filtrarPorBusca } from '@/lib/busca'
-import { authedFetch } from '@/lib/supabaseClient'
+import { syncCalendar } from '@/lib/calendarSync'
 import type { Pericia } from '@/lib/types'
 
 interface ArquivadosDialogProps {
@@ -20,32 +20,29 @@ interface ArquivadosDialogProps {
 export default function ArquivadosDialog({ pericias, onChanged }: ArquivadosDialogProps) {
   const [open, setOpen] = useState(false)
   const [busca, setBusca] = useState('')
-  const [reabrindo, setReabrindo] = useState<string | null>(null)
+  const [reabrindo, setReabrindo] = useState<Set<string>>(new Set())
 
   const arquivados = useMemo(
     () => pericias.filter(p => p.arquivado).sort((a, b) => a.poloAtivo.localeCompare(b.poloAtivo, 'pt-BR')),
     [pericias],
   )
   const lista = useMemo(
-    () => (busca ? filtrarPorBusca(arquivados, busca, p => [p.poloAtivo, p.poloPassivo, p.numeroProcesso, p.assunto, p.cidade, p.vara, p.fase, p.tipo]) : arquivados),
+    () => (busca ? filtrarPorBusca(arquivados, busca, p => [p.poloAtivo, p.poloPassivo, p.numeroProcesso, p.assunto, p.cidade, p.vara]) : arquivados),
     [arquivados, busca],
   )
 
   async function reabrir(p: Pericia) {
-    setReabrindo(p.id)
+    if (reabrindo.has(p.id)) return
+    setReabrindo(s => new Set(s).add(p.id))
     try {
       const res = await unarchivePericia(p.id)
       if (!res.ok) { toast.error('Não foi possível reabrir', { description: res.error }); return }
       // Recria os eventos da agenda (o arquivamento tinha apagado). Falha aqui não desfaz a reabertura.
-      authedFetch('/api/calendar/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ periciaId: p.id }),
-      }).catch(() => {})
+      void syncCalendar(p.id)
       toast.success('Processo reaberto', { description: `${p.poloAtivo} voltou para a tabela.` })
       onChanged()
     } finally {
-      setReabrindo(null)
+      setReabrindo(s => { const ns = new Set(s); ns.delete(p.id); return ns })
     }
   }
 
@@ -105,11 +102,11 @@ export default function ArquivadosDialog({ pericias, onChanged }: ArquivadosDial
               <FaseBadge fase={p.fase} size="sm" />
               <button
                 onClick={() => reabrir(p)}
-                disabled={reabrindo === p.id}
+                disabled={reabrindo.has(p.id)}
                 className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-md disabled:opacity-50"
                 style={{ background: 'rgba(212,175,55,0.18)', color: 'var(--gold)' }}
               >
-                {reabrindo === p.id ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                {reabrindo.has(p.id) ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
                 Reabrir
               </button>
             </div>

@@ -25,7 +25,6 @@ eq(ids('amelia'), '1', 'sem acento acha "Amélia" (o caso que falhou)')
 eq(ids('AMÉLIA'), '1', 'com acento e maiúscula')
 eq(ids('goiania'), '1,2', 'cidade sem acento')
 eq(ids('credito aymore'), '2', 'duas palavras sem acento, achando "Aymoré Crédito"')
-eq(ids('impugnacao'), '1', 'busca pela fase, sem acento')
 eq(ids('capitalizacao'), '1,2', 'assunto sem acento')
 
 console.log('\n== Número de processo ==')
@@ -57,6 +56,9 @@ eq(ids('99999999'), '', 'número que não existe não é aproximado')
 eq(ids('amelia zzzzzz'), '', 'uma palavra certa e outra inexistente: nada (todas precisam casar)')
 eq(ids(''), '1,2,3,4', 'busca vazia mostra tudo')
 eq(ids('   '), '1,2,3,4', 'só espaços mostra tudo')
+eq(ids('...---'), '1,2,3,4', 'só pontuação mostra tudo')
+{ const t0 = Date.now(); const r = ids('a'.repeat(5000)); const ms = Date.now() - t0
+  eq(r === '' && ms < 300, true, `consulta gigante (5000 letras) responde rápido (${ms} ms) e sem resultado`) }
 
 fs.rmSync(out, { recursive: true, force: true })
 console.log(`\n${pass} ok, ${fail} falhas`)

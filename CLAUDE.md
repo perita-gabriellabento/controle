@@ -46,6 +46,18 @@
    - 🏁 **Todas as perguntas da Gabi foram respondidas.** Nada pendente dela.
    - Suíte: `test:db` verde (schema 37 + integração 6 + API 9 + prazos 22). O teste I do `schema.test.js` agora só compara com a planilha as linhas não editadas depois da migração e fica "pulado" quando não há nenhuma (hoje, todas já foram editadas pela Gabi). Backup do banco antes do deploy em `backups/2026-10-05/`.
 
+## Regras do projeto (padrão Bia) — valem para toda mudança daqui pra frente
+
+1. **Deploy só por `scripts/deploy.sh "mensagem"`.** Ele não tem flag para pular trava. Ordem: árvore limpa → privacidade → `tsc` → `npm run test:db` → build → backup do banco → push no GitHub → Vercel → conferência no ar → tag `deploy-AAAAMMDD-HHMM`. `scripts/deploy.sh --dry-run "msg"` roda as travas e para antes de publicar. Nunca usar `npx vercel` direto.
+2. **Auditoria independente ANTES de publicar** (regra da Bia): 2 revisores read-only com prompts diferentes (um confere as regras de negócio contra o que a Gabi respondeu, outro tenta quebrar: dados, corridas, agenda). Achado CRÍTICO ou ALTO é corrigido antes do deploy. Se mexer em dinheiro, prazo ou agenda, um dos dois pode ser Opus.
+3. **Cada regra nova ganha teste novo** (`prazos.test.js`, `busca.test.js`, `schema.test.js`). O `INVENTARIO-DE-RECURSOS.md` nunca perde item. Falha reproduzível na suíte é regressão minha até provar o contrário contra a última tag `deploy-*` que passou; nunca chamar de "pré-existente" sem essa prova.
+4. **`npm run test:db` toca o banco de PRODUÇÃO** (não existe staging). Os testes criam linhas `TEST-*` e removem. Nunca alterar ou apagar linha que o teste não criou.
+5. **Backup antes de qualquer escrita no banco** (`backups/…`, só local, no `.gitignore`, contém dado de cliente). O deploy já faz. Escrita direta no banco: ler antes, usar filtro condicional (ex.: `fase=eq.Entregue`) e conferir depois, porque a Gabi edita ao mesmo tempo. O que altera a agenda do Google Calendar passa pela tela (a sincronização exige a sessão dela).
+6. **Privacidade: o repositório do GitHub é PÚBLICO.** Nenhum nome completo de parte nem número de processo real em arquivo versionado, commit ou artefato público (usar iniciais, números fictícios, primeiro nome + final do processo). `scripts/check-privacidade.sh` confere isso no deploy, comparando com os nomes que estão hoje no banco.
+7. **Perguntas para a Gabi vão num artefato único** (https://claude.ai/artifact/JgVnvv474UqBisVi4Pp55n); ela responde e copia o texto. **Nunca decidir no achismo**: dúvida vira pergunta. O link do artefato é público, então só primeiro nome + final do processo.
+8. **Documentar antes, durante e depois**: este arquivo é atualizado a cada mudança, e o estado vivo (código/banco) é conferido antes de afirmar qualquer coisa.
+9. **Lacunas conhecidas (honestas)**: não há teste automatizado de TELA (só lógica pura, banco e API); não há staging; não há CI no GitHub (o `deploy.sh` é a trava, local). Qualquer mudança visual precisa ser olhada de verdade antes de dizer que está pronta.
+
 ### Inventário de recursos que NUNCA pode regredir
 Ver `INVENTARIO-DE-RECURSOS.md` — checklist de toda funcionalidade da versão antiga que tem que sobreviver na nova.
 
@@ -124,11 +136,13 @@ Sempre rodar antes de considerar qualquer mudança de backend "pronta".
 
 Como tem rotas de servidor (Calendar), não usa `output: 'export'`/GitHub Pages. Produção é **Vercel** (`gabriellabento.com.br`). GitHub guarda só o código (`main`); push lá não publica. Processo:
 ```bash
-npx vercel --token "$(security find-generic-password -a "$USER" -s "vercel-pericias-gabi-token" -w)"
+scripts/deploy.sh "o que mudou, em uma frase"     # publica (com todas as travas)
+scripts/deploy.sh --dry-run "o que mudou"         # só roda as travas
 ```
+Rollback se algo der errado no ar: `npx vercel rollback` (volta para o deploy anterior, mantém o domínio). O token do Vercel fica no Keychain (`vercel-pericias-gabi-token`) e o `deploy.sh` lê de lá.
 Configurar as mesmas variáveis de `.env.local` no painel do Vercel (Settings → Environment Variables), trocando `APP_URL` de `http://localhost:3000` pra URL real do deploy.
 
-**Regra permanente, herdada da versão antiga:** nunca deployar código que represente regressão. Antes de qualquer deploy: rodar `npm run test:db`, `npx tsc --noEmit` e `npm run build` — todos precisam passar limpo.
+**Regra permanente, herdada da versão antiga:** nunca deployar código que represente regressão. Antes de qualquer deploy: usar `scripts/deploy.sh` (ver "Regras do projeto"), que roda `npx tsc --noEmit`, `npm run test:db` e `npm run build` e não deixa pular.
 
 ## Padrões de código (mantidos da versão anterior)
 

@@ -19,7 +19,10 @@ function toISO({ y, m, d }: YMD): string {
 }
 
 function toUTCDate({ y, m, d }: YMD): Date {
-  return new Date(Date.UTC(y, m - 1, d))
+  // Date.UTC(26, ...) interpreta ano < 100 como 1926; setUTCFullYear não.
+  const date = new Date(0)
+  date.setUTCFullYear(y, m - 1, d)
+  return date
 }
 
 function fromUTCDate(date: Date): YMD {

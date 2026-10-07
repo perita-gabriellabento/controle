@@ -9,8 +9,9 @@ import { authedFetch } from '@/lib/supabaseClient'
 import { formatCurrency, formatDate, parseCurrency, toTitleCase } from '@/lib/utils'
 import { utcTimestampToBrazilDate, calcPrazo } from '@/lib/businessDays'
 import { filtrarPorBusca } from '@/lib/busca'
+import { syncCalendar } from '@/lib/calendarSync'
 import { contaNosTotais } from '@/lib/prazos'
-import { ENTREGA_AUTOMATICA_ATIVA, entregaAutomatica, entregaTemAlerta, FASE_IMPUGNACAO } from '@/lib/prazos'
+import { ENTREGA_AUTOMATICA_ATIVA, entregaAutomatica, entregaAoLimparInicio, entregaTemAlerta, FASE_IMPUGNACAO } from '@/lib/prazos'
 import { fetchAnexos, uploadAnexo, deleteAnexo, getAnexoUrl, formatBytes, EXTENSOES_PERMITIDAS, type Anexo } from '@/lib/anexos'
 import EditableCell from '@/components/EditableCell'
 import FaseBadge from '@/components/FaseBadge'
@@ -49,15 +50,7 @@ const CAMPO_LABELS: Record<string, string> = {
 const CALENDAR_SYNC_FIELDS = new Set(['inicio', 'entregaPrevista', 'fase'])
 
 function triggerCalendarSync(periciaId: string) {
-  authedFetch('/api/calendar/sync', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ periciaId }),
-  }).catch(() => {
-    // Falha de sincronização com o Calendar não deve incomodar o fluxo principal —
-    // a perícia já foi salva com sucesso no banco de qualquer forma. Silenciosa
-    // de propósito; o job de auto-correção (Fase 3) resolve divergências depois.
-  })
+  void syncCalendar(periciaId) // fila por perícia, ver src/lib/calendarSync.ts
 }
 
 function triggerCalendarCleanup(periciaId: string) {
@@ -88,7 +81,7 @@ function applyFilters(pericias: Pericia[], f: Filters): Pericia[] {
   let list = pericias.filter(p => !p.arquivado)
   if (f.search) {
     // Busca tolerante a acento e a erro de digitação (ver src/lib/busca.ts).
-    list = filtrarPorBusca(list, f.search, p => [p.poloAtivo, p.poloPassivo, p.numeroProcesso, p.assunto, p.cidade, p.vara, p.fase, p.tipo])
+    list = filtrarPorBusca(list, f.search, p => [p.poloAtivo, p.poloPassivo, p.numeroProcesso, p.assunto, p.cidade, p.vara])
   }
   if (f.fase)   list = list.filter(p => p.fase === f.fase)
   if (f.tipo)   list = list.filter(p => p.tipo === f.tipo)
@@ -772,7 +765,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
     }
   }
 
-  const handleSave = useCallback((row: string, campo: keyof Pericia, valor: string, oldValor: string, silent = false, followUp?: () => Promise<{ ok: boolean; error?: string }>) => {
+  const handleSave = useCallback((row: string, campo: keyof Pericia, valor: string, oldValor: string, silent = false, companion?: { campo: keyof Pericia; valor: string; oldValor: string }) => {
     const cellKey = `${row}:${String(campo)}`
     const label = CAMPO_LABELS[String(campo)] || String(campo)
 
@@ -784,13 +777,22 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
       pendingTimers.current.delete(cellKey)
     }
 
+    // Campo "companheiro" (ex.: entrega calculada junto com o início): entra no cache agora, é gravado
+    // DEPOIS do campo principal e ANTES da sincronização do Calendar, e desfaz/reverte junto com ele.
+    // Se a Gabi mexer na célula do companheiro nesse meio-tempo, a edição dela vale e o app não grava o calculado.
+    const compKey = companion ? `${row}:${String(companion.campo)}` : ''
+    const compGen0 = companion ? (cellGenerations.current.get(compKey) || 0) : 0
+    const compIntacto = () => !companion || (cellGenerations.current.get(compKey) || 0) === compGen0
+    let companionGravado = false
+
     updateCache(row, campo, valor)
+    if (companion) updateCache(row, companion.campo, companion.valor)
     onUpdate()
     if (!silent) setSyncingCells(s => new Set(s).add(cellKey))
 
     if (!silent) {
       toast.success(label, {
-        description: 'Alterado',
+        description: companion ? (companion.valor ? `Entrega calculada: ${formatDate(companion.valor)} (30 dias corridos)` : 'Entrega calculada também foi limpa') : 'Alterado',
         action: {
           label: '↩ Desfazer',
           onClick: () => {
@@ -801,9 +803,14 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
               pendingTimers.current.delete(cellKey)
             }
             updateCache(row, campo, oldValor)
+            const desfazeCompanheiro = !!companion && compIntacto()
+            if (desfazeCompanheiro && companion) updateCache(row, companion.campo, companion.oldValor)
             setSyncingCells(s => { const ns = new Set(s); ns.delete(cellKey); return ns })
             onUpdate()
-            updatePericia(row, campo, oldValor)
+            const gravacoes: Promise<unknown>[] = [updatePericia(row, campo, oldValor)]
+            if (desfazeCompanheiro && companion && companionGravado) gravacoes.push(updatePericia(row, companion.campo, companion.oldValor))
+            // O Calendar também volta ao que era (antes o desfazer deixava o evento na data desfeita).
+            Promise.all(gravacoes).then(() => { if (CALENDAR_SYNC_FIELDS.has(campo as string)) triggerCalendarSync(row) })
             toast.info('Alteração desfeita', { duration: 2000 })
           },
         },
@@ -817,11 +824,10 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
       try {
         const res = await updatePericia(row, campo, valor)
         if (!res.ok) throw new Error(res.error || 'Falha ao salvar')
-        // Passo extra que precisa gravar ANTES da sincronização com o Calendar (ex.: entrega calculada
-        // junto com o início), pra os dois eventos saírem certos numa única sincronização.
-        if (followUp) {
-          const r2 = await followUp()
-          if (!r2.ok) {
+        if (companion && compIntacto()) {
+          const r2 = await updatePericia(row, companion.campo, companion.valor)
+          if (r2.ok) companionGravado = true
+          else {
             toast.error('Não foi possível gravar a entrega calculada', { description: r2.error })
             invalidateCache()
             onUpdate()
@@ -830,6 +836,7 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
         if (CALENDAR_SYNC_FIELDS.has(campo as string)) triggerCalendarSync(row)
       } catch (err) {
         revertCache(row, campo, oldValor)
+        if (companion && compIntacto()) revertCache(row, companion.campo, companion.oldValor)
         onUpdate()
         if (!silent) toast.error(`Não foi possível salvar: ${err instanceof Error ? err.message : 'tente novamente'}`, { description: label })
       } finally {
@@ -838,29 +845,22 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
     }, silent ? 100 : 800))
   }, [onUpdate])
 
-  // Início mudou: calcula a entrega (início + 30 dias corridos) quando ela está vazia ou ainda é a
-  // calculada antes. Entrega digitada à mão pela Gabi nunca é sobrescrita.
+  // Início mudou: a entrega acompanha (início + 30 dias corridos) quando está vazia ou ainda é a
+  // calculada antes; ao apagar o início, some a entrega que era calculada. Entrega digitada à mão
+  // pela Gabi nunca é sobrescrita nem apagada.
   const handleInicioSave = useCallback((p: Pericia, valor: string) => {
-    const nova = ENTREGA_AUTOMATICA_ATIVA ? entregaAutomatica({ inicioNovo: valor, inicioAntigo: p.inicio, entregaAtual: p.entregaPrevista }) : null
-    if (nova) {
-      const antiga = p.entregaPrevista
-      updateCache(p.id, 'entregaPrevista', nova)
-      onUpdate()
-      toast.info(`Entrega calculada: ${formatDate(nova)}`, {
-        description: '30 dias corridos depois do início',
-        action: {
-          label: '↩ Desfazer',
-          onClick: () => {
-            updateCache(p.id, 'entregaPrevista', antiga)
-            onUpdate()
-            updatePericia(p.id, 'entregaPrevista', antiga).then(() => triggerCalendarSync(p.id))
-          },
-        },
-        duration: 5000,
-      })
+    let companion: { campo: keyof Pericia; valor: string; oldValor: string } | undefined
+    if (ENTREGA_AUTOMATICA_ATIVA) {
+      if (valor === '') {
+        const limpa = entregaAoLimparInicio({ inicioAntigo: p.inicio, entregaAtual: p.entregaPrevista })
+        if (limpa !== null) companion = { campo: 'entregaPrevista', valor: limpa, oldValor: p.entregaPrevista }
+      } else {
+        const nova = entregaAutomatica({ inicioNovo: valor, inicioAntigo: p.inicio, entregaAtual: p.entregaPrevista })
+        if (nova) companion = { campo: 'entregaPrevista', valor: nova, oldValor: p.entregaPrevista }
+      }
     }
-    handleSave(p.id, 'inicio', valor, p.inicio, false, nova ? () => updatePericia(p.id, 'entregaPrevista', nova) : undefined)
-  }, [handleSave, onUpdate])
+    handleSave(p.id, 'inicio', valor, p.inicio, false, companion)
+  }, [handleSave])
 
   function calcHonorarios(proposta: string, origem: string): string {
     const n = parseFloat(proposta) || 0
@@ -924,6 +924,18 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
       setDeleting(null)
     }
   }
+
+  // Linha que o banco já confirmou como arquivada sai do conjunto de "escondidos otimistas": assim, se for
+  // reaberta na tela Arquivados sem recarregar, ela volta pra tabela (auditoria 07/10/2026).
+  useEffect(() => {
+    setOptimisticArchivedRows(prev => {
+      if (prev.size === 0) return prev
+      const ns = new Set(prev)
+      let mudou = false
+      prev.forEach(id => { const p = pericias.find(x => x.id === id); if (p && p.arquivado) { ns.delete(id); mudou = true } })
+      return mudou ? ns : prev
+    })
+  }, [pericias])
 
   const filtered = useMemo(() => {
     let list = applyFilters(pericias, filters)

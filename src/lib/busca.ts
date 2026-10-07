@@ -55,7 +55,7 @@ function palavraCasaTolerante(q: string, palavras: string[], digitosCampos: stri
   return palavras.some(p => {
     if (p.includes(q)) return true
     if (/^\d+$/.test(p)) return false
-    if (distancia(q, p) <= tol) return true
+    if (Math.abs(q.length - p.length) <= tol && distancia(q, p) <= tol) return true
     // palavra ainda sendo digitada, com um erro no meio: compara só com o começo da palavra
     if (q.length >= 5 && p.length > q.length) return distancia(q, p.slice(0, q.length)) <= 1
     return false
@@ -63,7 +63,7 @@ function palavraCasaTolerante(q: string, palavras: string[], digitosCampos: stri
 }
 
 export function filtrarPorBusca<T>(itens: T[], consulta: string, campos: (item: T) => string[]): T[] {
-  const tokens = normalizar(consulta).split(' ').filter(Boolean)
+  const tokens = normalizar((consulta || '').slice(0, 80)).split(' ').filter(Boolean) // teto: consulta enorme não pode travar a digitação
   if (!tokens.length) return itens
   const indexados = itens.map(item => {
     const cs = campos(item)
