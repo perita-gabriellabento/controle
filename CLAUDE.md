@@ -9,7 +9,7 @@
 - **Deploy:** CLI do Vercel (`npx vercel`, token no Keychain — ver seção Deploy). **Não** é via integração Git — push no GitHub não publica nada sozinho.
 - **Dados:** Supabase (35 processos migrados e auditados 100% contra a planilha).
 - **Planilha Google + `pericias-proxy.gs` (Apps Script):** o app **não usa mais**. **Decisão do Robert (02/10): deixar ligada e NÃO alterar nada — fica só como base histórica.** Não apagar, não editar, não desligar.
-- **GitHub Pages antigo** (`perita-gabriellabento.github.io/controle/`, branch `gh-pages` `a9f7a62`): continua no ar, ainda servindo o app antigo da planilha (HTTP 200 conferido em 02/10). O redirect pro domínio novo ainda **não foi publicado** — ver pendências.
+- **GitHub Pages antigo** (`perita-gabriellabento.github.io/controle/`): **DESATIVADO em 07/10/2026 a pedido do Robert** (confundia a Gabi). O GitHub NÃO deixa desligar o Pages pela API (422 "Deactivating GitHub pages for this repository is not allowed"), então a branch `gh-pages` agora só tem `index.html` + `404.html` que redirecionam para `gabriellabento.com.br` (commit `90feee1` na gh-pages; o app antigo continua no histórico dela, dá para voltar). Qualquer endereço antigo cai nessa página. Para desligar de vez: apagar a branch `gh-pages` (irreversível) ou desativar nas Settings > Pages pelo site do GitHub.
 
 ### Decisões fechadas (não reabrir)
 - **Proposta de honorários:** finalizada. Campo "Trecho da Decisão" 100% livre (commit `cdf22f3`); modelo `.docx` corrigido e no ar.
@@ -24,7 +24,7 @@
 - 29/09: domínio próprio no ar, OAuth Google em produção, auditoria adversarial planilha × Supabase (2 bugs achados na SUÍTE, não no app — testes corrompiam dado real; corrigidos, dados reconciliados, backup em `backups/2026-09-29/`), paginação mobile 10→50, push + merge no `main`.
 
 ### Pendências reais (o que falta)
-1. **Redirect do GitHub Pages antigo → `gabriellabento.com.br`.** Arquivos prontos, push que bloqueava já foi feito. Falta publicar na branch `gh-pages`. Risco enquanto não publica: link antigo ainda abre o app da planilha, que **não reflete mais os dados reais** (quem editar lá grava na planilha histórica, não no Supabase). Aguardando o Robert pedir.
+1. ~~Redirect do GitHub Pages antigo~~ **FEITO em 07/10/2026** (ver "Onde está cada coisa").
 2. **Teste de clique real ponta a ponta** (tabela, edição inline, undo, checklist, proposta/.docx, mobile, filtros) — itens do `INVENTARIO-DE-RECURSOS.md` seguem `[ ]` até Robert/Gabi confirmarem tela por tela. Só viram `[x]` com confirmação humana.
 3. **Gabi preencher "desde quando está nesta fase"** nos processos legados (ela está ciente) → depois rodar sincronização do Calendar pra criar os eventos de prazo restantes.
 4. **Pedidos de melhoria da Gabi (05/10/2026)** — questionário no artefato único do projeto (https://claude.ai/artifact/JgVnvv474UqBisVi4Pp55n); ela respondeu por texto em 05/10 (copiado na conversa; respostas: entrega 30 dias corridos mantendo data à mão, sem "Atrasado" em Impugnação/Entregue com data em cinza, impugnação conta da intimação, tarefa "Impugnação" + evento na agenda, ver só no painel expandido, campo próprio editável, prazos por fase confirmados). Estado:
