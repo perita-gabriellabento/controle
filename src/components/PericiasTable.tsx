@@ -804,7 +804,10 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
             }
             updateCache(row, campo, oldValor)
             const desfazeCompanheiro = !!companion && compIntacto()
-            if (desfazeCompanheiro && companion) updateCache(row, companion.campo, companion.oldValor)
+            if (desfazeCompanheiro && companion) {
+              updateCache(row, companion.campo, companion.oldValor)
+              cellGenerations.current.set(compKey, (cellGenerations.current.get(compKey) || 0) + 1) // derruba a gravação do companheiro que esteja em andamento
+            }
             setSyncingCells(s => { const ns = new Set(s); ns.delete(cellKey); return ns })
             onUpdate()
             const gravacoes: Promise<unknown>[] = [updatePericia(row, campo, oldValor)]
@@ -824,10 +827,20 @@ export default function PericiasTable({ pericias, filters, onUpdate }: PericiasT
       try {
         const res = await updatePericia(row, campo, valor)
         if (!res.ok) throw new Error(res.error || 'Falha ao salvar')
+        // "Desfazer" clicado enquanto a gravação estava em andamento: o desfazer já regravou o valor antigo;
+        // não grava o companheiro nem sincroniza por cima (auditoria 07/10, 2ª rodada).
+        if (cellGenerations.current.get(cellKey) !== gen) return
         if (companion && compIntacto()) {
           const r2 = await updatePericia(row, companion.campo, companion.valor)
-          if (r2.ok) companionGravado = true
-          else {
+          if (r2.ok) {
+            companionGravado = true
+            // Desfeito durante a gravação do companheiro: reverte ele também no banco e ressincroniza.
+            if (cellGenerations.current.get(cellKey) !== gen) {
+              await updatePericia(row, companion.campo, companion.oldValor)
+              triggerCalendarSync(row)
+              return
+            }
+          } else {
             toast.error('Não foi possível gravar a entrega calculada', { description: r2.error })
             invalidateCache()
             onUpdate()
